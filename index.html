@@ -1,51 +1,50 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <title>標案分箱工具 - 自動箱號版本 (CORS 修正版)</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    select, button, input { margin: 5px 5px 5px 0; padding: 5px; }
-    .top-controls {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 15px;
-      gap: 30px;
-      width: 92%;
-    }
-    .label-group {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .label-group label {
-      white-space: nowrap;
-    }
-    .container {
-      display: flex;
-      gap: 30px;
-      margin-top: 20px;
-      width: 92%;
-    }
-    .box { border: 1px solid #ccc; padding: 10px; width: 45%; min-height: 300px; }
-    ul { list-style: none; padding-left: 0; }
-    li { margin: 5px 0; padding: 4px; border-radius: 4px; }
-    li:hover { cursor: pointer; background: #e0e0e0; }
-    h3 { margin-top: 0; }
-    .box-controls { margin-top: 10px; }
-    #boxDetails {
-      margin-top: 20px;
-      border: 1px solid #aaa;
-      padding: 10px;
-      max-height: 300px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-family: monospace;
-      background: #f9f9f9;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>標案分箱工具 - 自動箱號版本</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; }
+  select, button, input { margin: 5px 5px 5px 0; padding: 5px; }
+  .top-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    gap: 30px;
+    width: 92%;
+  }
+  .label-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .label-group label {
+    white-space: nowrap;
+  }
+  .container {
+    display: flex;
+    gap: 30px;
+    margin-top: 20px;
+    width: 92%;
+  }
+  .box { border: 1px solid #ccc; padding: 10px; width: 45%; min-height: 300px; }
+  ul { list-style: none; padding-left: 0; }
+  li { margin: 5px 0; padding: 4px; border-radius: 4px; }
+  li:hover { cursor: pointer; background: #e0e0e0; }
+  h3 { margin-top: 0; }
+  #boxDetails {
+    margin-top: 20px;
+    border: 1px solid #aaa;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: monospace;
+    background: #f9f9f9;
+  }
+</style>
 </head>
 <body>
 
@@ -87,6 +86,7 @@
 <iframe id="printFrame" style="display:none;"></iframe>
 
 <script>
+const sheetURL = "https://opensheet.vercel.app/1LI0r1gbH0Ao2b1O6GfuwQFaje55_G4v4rqZwHpkJmD0/標案資料";
 const webAppURL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
 
 const yearSelect = document.getElementById("yearSelect");
@@ -101,80 +101,128 @@ const printPreviewBtn = document.getElementById("printPreviewBtn");
 const printAllBtn = document.getElementById("printAllBtn");
 const saveToSheetBtn = document.getElementById("saveToSheetBtn");
 const boxDetailsDiv = document.getElementById("boxDetails");
+const printFrame = document.getElementById("printFrame");
 
-let yearData = {};
-let boxAssignments = {};
+const yearData = {};
+const boxAssignments = {};
 
-async function loadData() {
-  try {
-    const res = await fetch(webAppURL);
-    const text = await res.text();
-    const data = JSON.parse(text);
-    yearData = data.yearData || {};
-    boxAssignments = data.boxAssignments || {};
-
-    // 確保每個年度至少有3個箱號
-    for (const year in yearData) {
-      for (let i = 1; i <= 3; i++) {
-        const boxId = `${year}-${i}`;
-        if (!boxAssignments[boxId]) {
-          boxAssignments[boxId] = [];
-        }
+// 用 JSONP 讀取分箱結果，避免 CORS 問題
+function loadSavedAssignments() {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonpCallback_" + Date.now();
+    window[callbackName] = function(data) {
+      if (data.error) {
+        reject(data.error);
+        delete window[callbackName];
+        script.remove();
+        return;
       }
-    }
-
-    refreshYearSelect();
-  } catch (e) {
-    alert("讀取資料失敗：" + e);
-  }
+      data.forEach(({ box, project }) => {
+        if (!boxAssignments[box]) boxAssignments[box] = [];
+        boxAssignments[box].push(project);
+      });
+      delete window[callbackName];
+      script.remove();
+      resolve();
+    };
+    const script = document.createElement("script");
+    script.src = webAppURL + "?callback=" + callbackName;
+    script.onerror = () => {
+      delete window[callbackName];
+      script.remove();
+      reject("讀取失敗");
+    };
+    document.body.appendChild(script);
+  });
 }
 
-function refreshYearSelect() {
-  yearSelect.innerHTML = "";
-  Object.keys(yearData).forEach(year => {
-    const opt = document.createElement("option");
-    opt.value = year;
-    opt.textContent = year;
-    yearSelect.appendChild(opt);
-  });
-  if (yearSelect.options.length > 0) {
-    yearSelect.value = yearSelect.options[0].value;
+async function loadSheetData() {
+  try {
+    const res = await fetch(sheetURL);
+    const raw = await res.json();
+
+    // 解析年度與標案名稱
+    Object.keys(raw[0] || {}).forEach(key => {
+      const year = key.trim();
+      if (/^\d{3,}年$/.test(year)) {
+        yearData[year] = [];
+      }
+    });
+
+    raw.forEach(row => {
+      for (const key in row) {
+        const year = key.trim();
+        if (yearData[year] && row[key].trim() !== "") {
+          yearData[year].push(row[key].trim());
+        }
+      }
+    });
+
+    // 預設每年建立三個箱號
+    Object.keys(yearData).forEach(year => {
+      for (let i = 1; i <= 3; i++) {
+        const boxId = `${year}-${i}`;
+        if (!boxAssignments[boxId]) boxAssignments[boxId] = [];
+      }
+    });
+
+    // 年度下拉選單
+    yearSelect.innerHTML = "";
+    Object.keys(yearData).forEach(y => {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    });
+    if (yearSelect.options.length > 0) yearSelect.value = yearSelect.options[0].value;
+
+    refreshBoxSelect();
+    updateProjectList();
+    updateBoxContent();
+
+    await loadSavedAssignments();
+
+    updateProjectList();
+    updateBoxContent();
+
+  } catch (e) {
+    alert("讀取標案資料失敗：" + e);
   }
-  refreshBoxSelect();
-  updateProjectList();
-  updateBoxContent();
 }
 
 function refreshBoxSelect() {
-  const selectedYear = yearSelect.value;
+  const year = yearSelect.value;
   boxSelect.innerHTML = "";
   const boxes = Object.keys(boxAssignments)
-    .filter(b => b.startsWith(selectedYear + "-"))
-    .sort((a, b) => {
-      const n1 = parseInt(a.split("-")[1]) || 0;
-      const n2 = parseInt(b.split("-")[1]) || 0;
-      return n1 - n2;
-    });
-  boxes.forEach(boxId => {
+    .filter(b => b.startsWith(year + "-"))
+    .sort((a,b) => parseInt(a.split("-")[1]) - parseInt(b.split("-")[1]));
+
+  boxes.forEach(b => {
     const opt = document.createElement("option");
-    opt.value = boxId;
-    opt.textContent = boxId;
+    opt.value = b;
+    opt.textContent = b;
     boxSelect.appendChild(opt);
   });
-  if (boxes.length > 0) {
-    boxSelect.value = boxes[0];
-  }
+  if (boxes.length > 0) boxSelect.value = boxes[0];
 }
 
 function updateProjectList() {
   const year = yearSelect.value;
   const projects = yearData[year] || [];
 
+  // 排除已分配到箱號的標案
+  let assignedProjects = [];
+  Object.keys(boxAssignments).forEach(box => {
+    assignedProjects = assignedProjects.concat(boxAssignments[box]);
+  });
+
   projectList.innerHTML = "";
   projects.forEach(p => {
-    const li = document.createElement("li");
-    li.textContent = p;
-    projectList.appendChild(li);
+    if (!assignedProjects.includes(p)) {
+      const li = document.createElement("li");
+      li.textContent = p;
+      projectList.appendChild(li);
+    }
   });
 }
 
@@ -190,36 +238,6 @@ function updateBoxContent() {
   });
 }
 
-// 把項目從年度標案移到箱號
-projectList.addEventListener("click", e => {
-  if (e.target.tagName === "LI") {
-    const project = e.target.textContent;
-    const year = yearSelect.value;
-    const box = boxSelect.value;
-
-    yearData[year] = yearData[year].filter(p => p !== project);
-    boxAssignments[box].push(project);
-
-    updateProjectList();
-    updateBoxContent();
-  }
-});
-
-// 把項目從箱號移回年度標案
-boxContent.addEventListener("click", e => {
-  if (e.target.tagName === "LI") {
-    const project = e.target.textContent;
-    const year = yearSelect.value;
-    const box = boxSelect.value;
-
-    boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
-    yearData[year].push(project);
-
-    updateProjectList();
-    updateBoxContent();
-  }
-});
-
 yearSelect.addEventListener("change", () => {
   refreshBoxSelect();
   updateProjectList();
@@ -232,47 +250,72 @@ boxSelect.addEventListener("change", () => {
   boxDetailsDiv.textContent = "";
 });
 
+projectList.addEventListener("click", e => {
+  if (e.target.tagName === "LI") {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelect.value;
+
+    if (!boxAssignments[box]) boxAssignments[box] = [];
+
+    boxAssignments[box].push(project);
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
+boxContent.addEventListener("click", e => {
+  if (e.target.tagName === "LI") {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelect.value;
+
+    if (!boxAssignments[box]) boxAssignments[box] = [];
+
+    // 移除該標案
+    boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
+
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
 addBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
-  const currentBoxes = Object.keys(boxAssignments)
-    .filter(b => b.startsWith(year + "-"))
-    .map(b => parseInt(b.split("-")[1]))
-    .filter(n => !isNaN(n));
-
-  const nextNumber = currentBoxes.length > 0 ? Math.max(...currentBoxes) + 1 : 1;
-  const boxId = `${year}-${nextNumber}`;
-
-  boxAssignments[boxId] = [];
+  const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(year + "-"));
+  let maxNum = 0;
+  boxes.forEach(b => {
+    const n = parseInt(b.split("-")[1]);
+    if (n > maxNum) maxNum = n;
+  });
+  const newBox = `${year}-${maxNum + 1}`;
+  boxAssignments[newBox] = [];
   refreshBoxSelect();
-  boxSelect.value = boxId;
+  boxSelect.value = newBox;
   updateBoxContent();
 });
 
 delBoxBtn.addEventListener("click", () => {
   const year = yearSelect.value;
-  const currentBoxes = Object.keys(boxAssignments)
+  const boxes = Object.keys(boxAssignments)
     .filter(b => b.startsWith(year + "-"))
-    .map(b => ({
-      id: b,
-      num: parseInt(b.split("-")[1])
-    }))
-    .filter(b => !isNaN(b.num))
-    .sort((a, b) => b.num - a.num);
+    .sort((a,b) => parseInt(b.split("-")[1]) - parseInt(a.split("-")[1]));
 
-  if (currentBoxes.length === 0) {
-    alert("目前無可刪除的箱號");
+  if (boxes.length === 0) {
+    alert("沒有可刪除的箱號");
     return;
   }
 
-  const { id: boxId } = currentBoxes[0]; // 最大編號箱號
-
-  if (boxAssignments[boxId].length > 0) {
-    boxAssignments[boxId].forEach(p => {
-      yearData[year].push(p);
+  const delBox = boxes[0];
+  // 移回標案到年度標案
+  if (boxAssignments[delBox] && boxAssignments[delBox].length > 0) {
+    boxAssignments[delBox].forEach(p => {
+      // 年度標案已存在，不重複加入
+      if (!yearData[year].includes(p)) yearData[year].push(p);
     });
   }
+  delete boxAssignments[delBox];
 
-  delete boxAssignments[boxId];
   refreshBoxSelect();
   updateProjectList();
   updateBoxContent();
@@ -280,26 +323,26 @@ delBoxBtn.addEventListener("click", () => {
 });
 
 exportBtn.addEventListener("click", () => {
-  let csvContent = "箱號,標案名稱\n";
-  const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
+  let csv = "箱號,標案名稱\n";
+  const boxes = Object.keys(boxAssignments).sort((a,b) => {
     const [yA, nA] = a.split("-");
     const [yB, nB] = b.split("-");
     if (yA !== yB) return yA.localeCompare(yB);
     return parseInt(nA) - parseInt(nB);
   });
 
-  sortedBoxes.forEach(boxId => {
-    const projects = boxAssignments[boxId];
-    if (projects.length === 0) {
-      csvContent += `"${boxId}",\n`;
+  boxes.forEach(box => {
+    const projs = boxAssignments[box];
+    if (projs.length === 0) {
+      csv += `"${box}",\n`;
     } else {
-      projects.forEach(p => {
-        csvContent += `"${boxId}","${p}"\n`;
+      projs.forEach(p => {
+        csv += `"${box}","${p}"\n`;
       });
     }
   });
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -317,16 +360,16 @@ showBoxDetailsBtn.addEventListener("click", () => {
     boxDetailsDiv.textContent = "請先選擇箱號";
     return;
   }
-  const projects = boxAssignments[box] || [];
-  if (projects.length === 0) {
+  const projs = boxAssignments[box];
+  if (!projs || projs.length === 0) {
     boxDetailsDiv.textContent = `箱號 ${box} 目前沒有標案內容`;
-  } else {
-    let text = `箱號 ${box} 標案內容:\n\n`;
-    projects.forEach((p, i) => {
-      text += `${i + 1}. ${p}\n`;
-    });
-    boxDetailsDiv.textContent = text;
+    return;
   }
+  let text = `箱號 ${box} 標案內容:\n\n`;
+  projs.forEach((p,i) => {
+    text += `${i+1}. ${p}\n`;
+  });
+  boxDetailsDiv.textContent = text;
 });
 
 printPreviewBtn.addEventListener("click", () => {
@@ -339,85 +382,95 @@ printPreviewBtn.addEventListener("click", () => {
 });
 
 printAllBtn.addEventListener("click", () => {
-  const sortedBoxes = Object.keys(boxAssignments).sort((a, b) => {
-    const [yA, nA] = a.split("-").map(x => isNaN(x) ? x : parseInt(x));
-    const [yB, nB] = b.split("-").map(x => isNaN(x) ? x : parseInt(x));
-    if (yA !== yB) return yA > yB ? 1 : -1;
-    return nA - nB;
+  const boxes = Object.keys(boxAssignments).sort((a,b) => {
+    const [yA, nA] = a.split("-");
+    const [yB, nB] = b.split("-");
+    if (yA !== yB) return yA.localeCompare(yB);
+    return parseInt(nA) - parseInt(nB);
   });
-  printBoxes(sortedBoxes);
+  printBoxes(boxes);
 });
 
 function printBoxes(boxArray) {
   const today = new Date().toISOString().slice(0, 10);
   let html = `
-    <html><head><meta charset="UTF-8" />
-    <title>列印預覽</title>
-    <style>
-      @page { size: A4 landscape; margin: 20mm 15mm 25mm 15mm; }
-      body { font-family: "Microsoft JhengHei", sans-serif; color: #222; margin: 0; padding: 0 15mm; -webkit-print-color-adjust: exact; }
-      .page { page-break-after: always; padding-bottom: 20px; border-bottom: 2px solid #bbb; box-sizing: border-box; position: relative; }
-      h1 { font-size: 24pt; font-weight: 900; text-align: center; margin: 0; padding-bottom: 4px; border-bottom: 2px solid #005a9e; color: #005a9e; letter-spacing: 1.5px; }
-      .date { font-size: 14pt; color: #555; text-align: center; margin: 8px 0 16px 0; font-weight: 600; }
-      h3 { font-size: 18pt; font-weight: 700; color: #003f72; margin-bottom: 25px; letter-spacing: 1.5px; }
-      ul { padding-left: 20px; font-size: 12pt; letter-spacing: 1.1px; }
-      li { margin-bottom: 6px; }
-      .footer { font-size: 10pt; text-align: center; color: #999; margin-top: 30px; }
-    </style>
-    </head><body>`;
+  <html><head><meta charset="UTF-8" />
+  <title>列印預覽</title>
+  <style>
+    @page { size: A4 landscape; margin: 20mm 15mm 25mm 15mm; }
+    body { font-family: "Microsoft JhengHei", sans-serif; color: #222; margin: 0; padding: 0 15mm; -webkit-print-color-adjust: exact; }
+    .page { page-break-after: always; padding-bottom: 20px; border-bottom: 2px solid #bbb; box-sizing: border-box; }
+    h2 { text-align: center; margin: 8px 0; }
+    ul { list-style:none; padding-left: 0; margin-top: 5px; }
+    li { font-weight: bold; font-size: 18px; line-height: 1.5; margin-bottom: 3px; }
+  </style>
+  </head><body>
+  <h1 style="text-align:center; margin-bottom:30px;">分箱標案列印 - ${today}</h1>
+  `;
 
-  boxArray.forEach(boxId => {
-    const projects = boxAssignments[boxId] || [];
-    html += `<div class="page">`;
-    html += `<h1>台南市政府資訊中心標案分箱清冊</h1>`;
-    html += `<div class="date">列印日期：${today}</div>`;
-    html += `<h3>${boxId} 標案清冊</h3>`;
-    html += `<ul>`;
-    projects.forEach(p => {
-      html += `<li>${p}</li>`;
-    });
-    html += `</ul>`;
-    html += `<div class="footer">系統自動產生，請妥善保存</div>`;
-    html += `</div>`;
+  boxArray.forEach(box => {
+    html += `<div class="page"><h2>箱號 ${box}</h2><ul>`;
+    const projects = boxAssignments[box] || [];
+    if (projects.length === 0) {
+      html += `<li>無標案</li>`;
+    } else {
+      projects.forEach(p => {
+        html += `<li>${p}</li>`;
+      });
+    }
+    html += "</ul></div>";
   });
 
   html += `</body></html>`;
 
-  const iframe = document.getElementById("printFrame");
-  iframe.srcdoc = html;
-  iframe.onload = () => {
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-  };
+  const doc = printFrame.contentDocument || printFrame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  printFrame.contentWindow.focus();
+  printFrame.contentWindow.print();
 }
 
 saveToSheetBtn.addEventListener("click", async () => {
-  // 將 boxAssignments 轉成陣列格式 [{box:"110年-1",project:"標案A"}, ...]
-  let payload = [];
-  Object.entries(boxAssignments).forEach(([box, projects]) => {
-    projects.forEach(p => {
-      payload.push({ box, project: p });
-    });
-  });
-
   try {
+    let saveData = [];
+    Object.keys(boxAssignments).forEach(box => {
+      const projs = boxAssignments[box];
+      projs.forEach(p => {
+        saveData.push({ box, project: p });
+      });
+    });
+
+    if (saveData.length === 0) {
+      alert("沒有分箱結果，無法存檔");
+      return;
+    }
+
     const res = await fetch(webAppURL, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(saveData),
       headers: { "Content-Type": "application/json" }
     });
+
+    if (!res.ok) {
+      alert("存檔失敗");
+      return;
+    }
+
     const text = await res.text();
     if (text === "OK") {
-      alert("分箱結果已成功存入 Google Sheets");
+      alert("存檔成功！");
     } else {
       alert("存檔失敗：" + text);
     }
-  } catch (e) {
-    alert("存檔發生錯誤：" + e);
+  } catch (err) {
+    alert("存檔錯誤：" + err);
   }
 });
 
-loadData();
+// 頁面初始載入
+loadSheetData();
+
 </script>
 
 </body>
