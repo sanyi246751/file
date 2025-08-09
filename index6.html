@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>標案分箱工具 - 自動箱號版本</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    select, button, input { margin: 5px 5px 5px 0; padding: 5px; }
+    .top-controls {
+      display: flex;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      gap: 30px;
+      width: 92%;
+    }
+    .label-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .label-group > label {
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .container {
+      display: flex;
+      gap: 30px;
+      margin-top: 20px;
+      width: 92%;
+    }
+    .box { border: 1px solid #ccc; padding: 10px; width: 45%; min-height: 300px; }
+    ul { list-style: none; padding-left: 0; }
+    li { margin: 5px 0; padding: 4px; border-radius: 4px; }
+    li:hover { cursor: pointer; background: #e0e0e0; }
+    h3 { margin-top: 0; }
+    .box-controls { margin-top: 10px; }
+    #boxDetails {
+      margin-top: 20px;
+      border: 1px solid #aaa;
+      padding: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: monospace;
+      background: #f9f9f9;
+    }
+    /* 選擇箱號按鈕區塊使用 grid 排版 */
+    #boxButtons {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(70px, 1fr));
+      gap: 8px;
+      max-width: 400px; /* 可調整寬度 */
+    }
+    #boxButtons button {
+      padding: 6px 8px;
+      border-radius: 5px;
+      border: 1px solid #007BFF;
+      background-color: white;
+      color: #007BFF;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #boxButtons button:hover {
+      background-color: #e6f0ff;
+    }
+    #boxButtons button.selected {
+      background-color: #007BFF;
+      color: white;
+      font-weight: 700;
+    }
+    /* 按鈕群下面的新增/刪除按鈕 */
+    #boxActionButtons {
+      margin-top: 8px;
+    }
+    #boxActionButtons button {
+      padding: 6px 12px;
+      margin-right: 8px;
+      border-radius: 4px;
+      border: 1px solid #007BFF;
+      background-color: white;
+      color: #007BFF;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #boxActionButtons button:hover {
+      background-color: #007BFF;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+<h2>標案分箱工具（自動編號）</h2>
+
+<div class="top-controls">
+  <div class="label-group">
+    <label for="yearSelect">選擇年度：</label>
+    <select id="yearSelect"></select>
+  </div>
+  <div class="label-group">
+    <label>選擇箱號：</label>
+    <div id="boxButtons"></div>
+    <div id="boxActionButtons">
+      <button id="addBoxBtn">新增箱號</button>
+      <button id="delBoxBtn">刪除箱號</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="box">
+    <h3>年度標案名稱（點擊加入箱號）</h3>
+    <ul id="projectList"></ul>
+  </div>
+  <div class="box">
+    <h3>箱號內容（點擊退回年度標案）</h3>
+    <ul id="boxContent"></ul>
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+  <button id="saveBtn" style="padding:10px 15px;">存檔分箱結果</button>
+  <button id="loadBtn" style="padding:10px 15px; margin-left:10px;">讀取分箱結果</button>
+  <button id="showBoxDetailsBtn" style="margin-left: 10px; padding:10px 15px;">列出箱號內容</button>
+  <button id="exportBtn" style="margin-left: 10px; padding:10px 15px;">匯出分箱結果</button>
+  <button id="printPreviewBtn" style="margin-left: 10px; padding:10px 15px;">列印預覽</button>
+  <button id="printAllBtn" style="margin-left: 10px; padding:10px 15px;">全部列印</button>
+</div>
+
+<div id="boxDetails"></div>
+<iframe id="printFrame" style="display:none;"></iframe>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
+
+const yearSelect = document.getElementById("yearSelect");
+const boxButtonsDiv = document.getElementById("boxButtons");
+const projectList = document.getElementById("projectList");
+const boxContent = document.getElementById("boxContent");
+const addBoxBtn = document.getElementById("addBoxBtn");
+const delBoxBtn = document.getElementById("delBoxBtn");
+const saveBtn = document.getElementById("saveBtn");
+const loadBtn = document.getElementById("loadBtn");
+const exportBtn = document.getElementById("exportBtn");
+const showBoxDetailsBtn = document.getElementById("showBoxDetailsBtn");
+const printPreviewBtn = document.getElementById("printPreviewBtn");
+const printAllBtn = document.getElementById("printAllBtn");
+const boxDetailsDiv = document.getElementById("boxDetails");
+
+let yearData = {};
+let boxAssignments = {};
+let boxSelectValue = null;
+
+function jsonpFetch(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'cb' + Math.floor(Math.random() * 1000000);
+    window[callbackName] = function(response) {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      if (response.status === 'success') {
+        resolve(response.data || response);
+      } else {
+        reject(new Error(response.message || '錯誤'));
+      }
+    };
+
+    params.action = action;
+    params.callback = callbackName;
+
+    const queryString = Object.entries(params).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    const script = document.createElement('script');
+    script.src = `${GAS_URL}?${queryString}`;
+    script.onerror = () => {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      reject(new Error('JSONP 載入失敗'));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function loadYearData() {
+  yearData = await jsonpFetch('loadData');
+  populateYearSelect();
+}
+
+function populateYearSelect() {
+  yearSelect.innerHTML = '';
+  Object.keys(yearData).forEach(year => {
+    const opt = document.createElement('option');
+    opt.value = year;
+    opt.textContent = year;
+    yearSelect.appendChild(opt);
+  });
+
+  if (yearSelect.options.length > 0) {
+    yearSelect.value = yearSelect.options[0].value;
+    initializeBoxes(yearSelect.value);
+  }
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+}
+
+function initializeBoxes(year) {
+  // 若boxAssignments中沒有該年度的箱號，建立三個預設箱號
+  const existingBoxes = Object.keys(boxAssignments).filter(b => b.startsWith(year + '-'));
+  if (existingBoxes.length === 0) {
+    for (let i = 1; i <= 3; i++) {
+      boxAssignments[`${year}-${i}`] = [];
+    }
+  }
+  refreshBoxSelect();
+}
+
+function refreshBoxSelect() {
+  const selectedYear = yearSelect.value;
+  boxButtonsDiv.innerHTML = '';
+
+  const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(selectedYear + '-'));
+  boxes.sort((a, b) => {
+    const n1 = parseInt(a.split('-')[1]);
+    const n2 = parseInt(b.split('-')[1]);
+    return n1 - n2;
+  });
+
+  boxes.forEach(boxId => {
+    const btn = document.createElement('button');
+    btn.textContent = boxId;
+    btn.classList.toggle('selected', boxId === boxSelectValue);
+
+    btn.addEventListener('click', () => {
+      boxSelectValue = boxId;
+      updateBoxContent();
+      updateBoxButtonsHighlight();
+    });
+
+    boxButtonsDiv.appendChild(btn);
+  });
+
+  if (!boxes.includes(boxSelectValue)) {
+    boxSelectValue = boxes[0] || null;
+  }
+  updateBoxButtonsHighlight();
+  updateBoxContent();
+}
+
+function updateBoxButtonsHighlight() {
+  [...boxButtonsDiv.children].forEach(btn => {
+    if (btn.textContent === boxSelectValue) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
+  });
+}
+
+function updateProjectList() {
+  const year = yearSelect.value;
+  const projects = yearData[year] || [];
+
+  projectList.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    projectList.appendChild(li);
+  });
+}
+
+function updateBoxContent() {
+  const box = boxSelectValue;
+  const projects = boxAssignments[box] || [];
+
+  boxContent.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    boxContent.appendChild(li);
+  });
+}
+
+projectList.addEventListener('click', e => {
+  if (e.target.tagName === 'LI') {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelectValue;
+    if (!box) return alert('請先選擇箱號');
+
+    // 年度移除
+    yearData[year] = yearData[year].filter(p => p !== project);
+    // 加入箱號
+    if (!boxAssignments[box]) boxAssignments[box] = [];
+    boxAssignments[box].push(project);
+
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
+boxContent.addEventListener('click', e => {
+  if (e.target.tagName === 'LI') {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelectValue;
+    if (!box) return alert('請先選擇箱號');
+
+    // 箱號移除
+    boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
+    // 加回年度
+    yearData[year].push(project);
+
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
+yearSelect.addEventListener('change', () => {
+  initializeBoxes(yearSelect.value);
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+});
+
+addBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if (!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year + '-'));
+  const nextNum = boxesOfYear.length > 0 ? Math.max(...boxesOfYear.map(b => parseInt(b.split('-')[1]))) + 1 : 1;
+  const newBox = `${year}-${nextNum}`;
+  boxAssignments[newBox] = [];
+  boxSelectValue = newBox;
+  refreshBoxSelect();
+  updateBoxContent();
+});
+
+delBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if (!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments)
+    .filter(b => b.startsWith(year + '-'))
+    .sort((a,b) => {
+      return parseInt(b.split('-')[1]) - parseInt(a.split('-')[1]);
+    });
+  if (boxesOfYear.length === 0) return alert('目前無可刪除的箱號');
+  const delBox = boxesOfYear[0];
+  // 退回箱內所有標案到年度
+  boxAssignments[delBox].forEach(p => {
+    yearData[year].push(p);
+  });
+  delete boxAssignments[delBox];
+  if (boxSelectValue === delBox) boxSelectValue = null;
+  refreshBoxSelect();
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+});
+
+saveBtn.addEventListener('click', async () => {
+  try {
+    await jsonpFetch('saveAssignments', { assignments: JSON.stringify(boxAssignments) });
+    alert('分箱結果已儲存');
+  } catch (e) {
+    alert('儲存失敗: ' + e.message);
+  }
+});
+
+loadBtn.addEventListener('click', async () => {
+  try {
+    const saved = await jsonpFetch('loadAssignments');
+    if (!saved) return alert('無分箱結果資料');
+    boxAssignments = saved;
+    // 把箱號裡的標案從年度中剔除，確保一致
+    Object.keys(yearData).forEach(y => {
+      yearData[y] = yearData[y].filter(p => {
+        for (const boxId in boxAssignments) {
+          if (boxAssignments[boxId].includes(p)) return false;
+        }
+        return true;
+      });
+    });
+    boxSelectValue = null;
+    refreshBoxSelect();
+    updateProjectList();
+    updateBoxContent();
+    boxDetailsDiv.textContent = '已載入分箱結果';
+  } catch (e) {
+    alert('讀取失敗: ' + e.message);
+  }
+});
+
+exportBtn.addEventListener('click', () => {
+  let csvContent = "箱號,標案名稱\n";
+  const sortedBoxes = Object.keys(boxAssignments).sort((a,b) => {
+    const [yA,nA] = a.split('-');
+    const [yB,nB] = b.split('-');
+    if (yA !== yB) return yA.localeCompare(yB);
+    return parseInt(nA) - parseInt(nB);
+  });
+
+  sortedBoxes.forEach(boxId => {
+    const projects = boxAssignments[boxId];
+    if (projects.length === 0) {
+      csvContent += `"${boxId}",\n`;
+    } else {
+      projects.forEach(p => {
+        csvContent += `"${boxId}","${p}"\n`;
+      });
+    }
+  });
+
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "分箱結果.csv";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+showBoxDetailsBtn.addEventListener('click', () => {
+  const box = boxSelectValue;
+  if (!box) {
+    boxDetailsDiv.textContent = '請先選擇箱號';
+    return;
+  }
+  const projects = boxAssignments[box] || [];
+  if (projects.length === 0) {
+    boxDetailsDiv.textContent = `箱號 ${box} 目前沒有標案內容`;
+  } else {
+    let text = `箱號 ${box} 標案內容:\n\n`;
+    projects.forEach((p,i) => {
+      text += `${i+1}. ${p}\n`;
+    });
+    boxDetailsDiv.textContent = text;
+  }
+});
+
+printPreviewBtn.addEventListener('click', () => {
+  const box = boxSelectValue;
+  if (!box) {
+    alert('請先選擇箱號');
+    return;
+  }
+  printBoxes([box]);
+});
+
+printAllBtn.addEventListener('click', () => {
+  const sortedBoxes = Object.keys(boxAssignments).sort((a,b) => {
+    const [yA,nA] = a.split('-');
+    const [yB,nB] = b.split('-');
+    if (yA !== yB) return yA.localeCompare(yB);
+    return parseInt(nA) - parseInt(nB);
+  });
+  printBoxes(sortedBoxes);
+});
+
+function printBoxes(boxArray) {
+  const today = new Date().toISOString().slice(0,10);
+  let html = `
+    <html><head><meta charset="UTF-8" />
+    <title>列印預覽</title>
+    <style>
+      @page { size: A4 landscape; margin: 20mm 15mm 25mm 15mm; }
+      body { font-family: "Microsoft JhengHei", sans-serif; color: #222; margin: 0; padding: 0 15mm; -webkit-print-color-adjust: exact; }
+      .page { page-break-after: always; padding-bottom: 20px; border-bottom: 2px solid #bbb; box-sizing: border-box; position: relative; }
+      h1 { font-size: 24pt; font-weight: 900; text-align: center; margin: 0; padding-bottom: 4px; border-bottom: 2px solid #005a9e; color: #005a9e; }
+      h2 { font-size: 16pt; font-weight: 700; margin: 5px 0 15px 0; }
+      ul { list-style-type: decimal; padding-left: 20px; font-size: 12pt; }
+      li { margin: 4px 0; }
+      .footer {
+        position: absolute; bottom: 5mm; right: 15mm;
+        font-size: 10pt; color: #888;
+      }
+    </style>
+    </head><body>`;
+
+  boxArray.forEach(box => {
+    const projects = boxAssignments[box] || [];
+    html += `<div class="page">`;
+    html += `<h1>標案分箱工具 - 分箱結果</h1>`;
+    html += `<h2>箱號：${box} &nbsp;&nbsp; 列印日期：${today}</h2>`;
+    if (projects.length === 0) {
+      html += `<p>箱號無標案內容</p>`;
+    } else {
+      html += `<ul>`;
+      projects.forEach(p => {
+        html += `<li>${p}</li>`;
+      });
+      html += `</ul>`;
+    }
+    html += `<div class="footer">版權所有 © WEIKAI WANG</div>`;
+    html += `</div>`;
+  });
+
+  html += `</body></html>`;
+
+  const iframe = document.getElementById('printFrame');
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+}
+
+window.onload = async () => {
+  try {
+    await loadYearData();
+    // 開啟網頁時讀取分箱結果
+    const saved = await jsonpFetch('loadAssignments');
+    if (saved) {
+      boxAssignments = saved;
+      // 從分箱結果剔除年度資料中已存在的標案
+      Object.keys(yearData).forEach(y => {
+        yearData[y] = yearData[y].filter(p => {
+          for (const boxId in boxAssignments) {
+            if (boxAssignments[boxId].includes(p)) return false;
+          }
+          return true;
+        });
+      });
+      boxSelectValue = null;
+      refreshBoxSelect();
+      updateProjectList();
+      updateBoxContent();
+      boxDetailsDiv.textContent = '已載入分箱結果';
+    }
+  } catch (e) {
+    alert('初始化失敗: ' + e.message);
+  }
+};
+</script>
+
+</body>
+</html>
