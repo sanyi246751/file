@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>標案分箱工具 - 手機版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <style>
+    body {
+      font-family: Arial, "Microsoft JhengHei", sans-serif;
+      margin: 10px;
+      padding: 10px;
+      background: #fff;
+      color: #222;
+      font-size: 18px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    select, button, input[type="file"] {
+      font-size: 18px;
+      padding: 12px 15px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: 1.5px solid #007BFF;
+      background: white;
+      color: #007BFF;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: pointer;
+      transition: background-color 0.3s, color 0.3s;
+      user-select: none;
+    }
+    select:focus, button:focus, input[type="file"]:focus {
+      border-color: #0056b3;
+      background-color: #e6f0ff;
+    }
+    button:hover {
+      background-color: #007BFF;
+      color: white;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    h3 {
+      font-size: 20px;
+      margin-top: 0;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .top-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 15px;
+      width: 100%;
+    }
+    .label-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .label-group > label {
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    #boxButtons {
+      display: flex;
+      overflow-x: auto;
+      gap: 10px;
+      padding-bottom: 4px;
+    }
+    #boxButtons button {
+      flex: 0 0 auto;
+      min-width: 90px;
+      font-size: 17px;
+      border-radius: 10px;
+      border: 2px solid #007BFF;
+      background-color: white;
+      color: #007BFF;
+      padding: 10px 12px;
+      user-select: none;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #boxButtons button.selected {
+      background-color: #007BFF;
+      color: white;
+      font-weight: 700;
+    }
+    #boxButtons button:hover {
+      background-color: #e6f0ff;
+    }
+
+    #boxActionButtons {
+      display: flex;
+      gap: 10px;
+      margin-top: 5px;
+    }
+    #boxActionButtons button {
+      flex: 1;
+      border-radius: 8px;
+      border: 2px solid #007BFF;
+      background-color: white;
+      color: #007BFF;
+      padding: 12px 0;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    #boxActionButtons button:hover {
+      background-color: #007BFF;
+      color: white;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+      width: 100%;
+    }
+    .box {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 15px;
+      width: 100%;
+      min-height: 200px;
+      box-sizing: border-box;
+      background: #fafafa;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 5px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      background-color: white;
+    }
+    li {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 17px;
+      user-select: none;
+    }
+    li:last-child {
+      border-bottom: none;
+    }
+    li:hover {
+      cursor: pointer;
+      background-color: #e0e0e0;
+    }
+
+    div[style*="margin-top:20px"] {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    div[style*="margin-top:20px"] > button,
+    div[style*="margin-top:20px"] > input[type="file"] {
+      flex: 1 1 150px;
+      max-width: 180px;
+      min-width: 130px;
+      box-sizing: border-box;
+    }
+
+    #boxDetails {
+      margin-top: 20px;
+      border: 1px solid #aaa;
+      padding: 15px;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: monospace;
+      background: #f9f9f9;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+
+    #printFrame {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<h2>標案分箱工具（自動編號）</h2>
+
+<div class="top-controls">
+  <div class="label-group">
+    <label for="yearSelect">選擇年度：</label>
+    <select id="yearSelect"></select>
+  </div>
+  <div class="label-group">
+    <label>選擇箱號：</label>
+    <div id="boxButtons"></div>
+    <div id="boxActionButtons">
+      <button id="addBoxBtn">新增箱號</button>
+      <button id="delBoxBtn">刪除箱號</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="box">
+    <h3>年度標案名稱（點擊加入箱號）</h3>
+    <ul id="projectList"></ul>
+  </div>
+  <div class="box">
+    <h3>箱號內容（點擊退回年度標案）</h3>
+    <ul id="boxContent"></ul>
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+  <button id="saveBtn">存檔分箱結果</button>
+  <button id="loadBtn">讀取分箱結果</button>
+  <button id="showBoxDetailsBtn">列出箱號內容</button>
+  <button id="exportBtn">匯出分箱結果</button>
+  <button id="printPreviewBtn">列印預覽</button>
+  <button id="printAllBtn">全部列印</button>
+  <input type="file" id="importCsvFile" accept=".csv" />
+</div>
+
+<div id="boxDetails"></div>
+<iframe id="printFrame"></iframe>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
+
+const yearSelect = document.getElementById("yearSelect");
+const boxButtonsDiv = document.getElementById("boxButtons");
+const projectList = document.getElementById("projectList");
+const boxContent = document.getElementById("boxContent");
+const addBoxBtn = document.getElementById("addBoxBtn");
+const delBoxBtn = document.getElementById("delBoxBtn");
+const saveBtn = document.getElementById("saveBtn");
+const loadBtn = document.getElementById("loadBtn");
+const exportBtn = document.getElementById("exportBtn");
+const showBoxDetailsBtn = document.getElementById("showBoxDetailsBtn");
+const printPreviewBtn = document.getElementById("printPreviewBtn");
+const printAllBtn = document.getElementById("printAllBtn");
+const boxDetailsDiv = document.getElementById("boxDetails");
+const importCsvFile = document.getElementById("importCsvFile");
+
+let yearData = {};
+let boxAssignments = {};
+let boxSelectValue = null;
+
+function jsonpFetch(action, params = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'cb' + Math.floor(Math.random() * 1000000);
+    window[callbackName] = function(response) {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      if (response.status === 'success') {
+        resolve(response.data || response);
+      } else {
+        reject(new Error(response.message || '錯誤'));
+      }
+    };
+
+    params.action = action;
+    params.callback = callbackName;
+
+    const queryString = Object.entries(params).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+    const script = document.createElement('script');
+    script.src = `${GAS_URL}?${queryString}`;
+    script.onerror = () => {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      reject(new Error('JSONP 載入失敗'));
+    };
+    document.body.appendChild(script);
+  });
+}
+
+async function loadYearData() {
+  yearData = await jsonpFetch('loadData');
+  populateYearSelect();
+}
+
+function populateYearSelect() {
+  yearSelect.innerHTML = '';
+  Object.keys(yearData).forEach(year => {
+    const opt = document.createElement('option');
+    opt.value = year;
+    opt.textContent = year;
+    yearSelect.appendChild(opt);
+  });
+
+  if (yearSelect.options.length > 0) {
+    yearSelect.value = yearSelect.options[0].value;
+    initializeBoxes(yearSelect.value);
+  }
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+}
+
+function initializeBoxes(year) {
+  const existingBoxes = Object.keys(boxAssignments).filter(b => b.startsWith(year + '-'));
+  if (existingBoxes.length === 0) {
+    for (let i = 1; i <= 3; i++) {
+      boxAssignments[`${year}-${i}`] = [];
+    }
+  }
+  refreshBoxSelect();
+}
+
+function refreshBoxSelect() {
+  const selectedYear = yearSelect.value;
+  boxButtonsDiv.innerHTML = '';
+
+  const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(selectedYear + '-'));
+  boxes.sort((a, b) => {
+    const n1 = parseInt(a.split('-')[1]);
+    const n2 = parseInt(b.split('-')[1]);
+    return n1 - n2;
+  });
+
+  boxes.forEach(boxId => {
+    const btn = document.createElement('button');
+    btn.textContent = boxId;
+    btn.classList.toggle('selected', boxId === boxSelectValue);
+
+    btn.addEventListener('click', () => {
+      boxSelectValue = boxId;
+      updateBoxContent();
+      updateBoxButtonsHighlight();
+    });
+
+    boxButtonsDiv.appendChild(btn);
+  });
+
+  if (!boxes.includes(boxSelectValue)) {
+    boxSelectValue = boxes[0] || null;
+  }
+  updateBoxButtonsHighlight();
+  updateBoxContent();
+}
+
+function updateBoxButtonsHighlight() {
+  [...boxButtonsDiv.children].forEach(btn => {
+    if (btn.textContent === boxSelectValue) {
+      btn.classList.add('selected');
+    } else {
+      btn.classList.remove('selected');
+    }
+  });
+}
+
+function updateProjectList() {
+  const year = yearSelect.value;
+  const projects = yearData[year] || [];
+
+  projectList.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    projectList.appendChild(li);
+  });
+}
+
+function updateBoxContent() {
+  const box = boxSelectValue;
+  const projects = boxAssignments[box] || [];
+
+  boxContent.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    boxContent.appendChild(li);
+  });
+}
+
+projectList.addEventListener('click', e => {
+  if (e.target.tagName === 'LI') {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelectValue;
+    if (!box) return alert('請先選擇箱號');
+
+    yearData[year] = yearData[year].filter(p => p !== project);
+
+    if (!boxAssignments[box]) boxAssignments[box] = [];
+    boxAssignments[box].push(project);
+
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
+boxContent.addEventListener('click', e => {
+  if (e.target.tagName === 'LI') {
+    const project = e.target.textContent;
+    const year = yearSelect.value;
+    const box = boxSelectValue;
+    if (!box) return alert('請先選擇箱號');
+
+    boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
+    yearData[year].push(project);
+
+    updateProjectList();
+    updateBoxContent();
+  }
+});
+
+yearSelect.addEventListener('change', () => {
+  initializeBoxes(yearSelect.value);
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+});
+
+addBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if (!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year + '-'));
+  const nextNum = boxesOfYear.length > 0 ? Math.max(...boxesOfYear.map(b => parseInt(b.split('-')[1]))) + 1 : 1;
+  const newBox = `${year}-${nextNum}`;
+  boxAssignments[newBox] = [];
+  boxSelectValue = newBox;
+  refreshBoxSelect();
+  updateBoxContent();
+});
+
+delBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if (!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments)
+    .filter(b => b.startsWith(year + '-'))
+    .sort((a,b) => {
+      return parseInt(b.split('-')[1]) - parseInt(a.split('-')[1]);
+    });
+  if (boxesOfYear.length === 0) return alert('目前無可刪除的箱號');
+  const delBox = boxesOfYear[0];
+  boxAssignments[delBox].forEach(p => {
+    yearData[year].push(p);
+  });
+  delete boxAssignments[delBox];
+  if (boxSelectValue === delBox) boxSelectValue = null;
+  refreshBoxSelect();
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+});
+
+saveBtn.addEventListener('click', async () => {
+  try {
+    await jsonpFetch('saveAssignments', { assignments: JSON.stringify(boxAssignments) });
+    alert('分箱結果已儲存');
+  } catch (e) {
+    alert('儲存失敗: ' + e.message);
+  }
+});
+
+loadBtn.addEventListener('click', async () => {
+  try {
+    const saved = await jsonpFetch('loadAssignments');
+    if (!saved) return alert('無分箱結果資料');
+    boxAssignments = saved;
+    Object.keys(yearData).forEach(y => {
+      yearData[y] = yearData[y].filter(p => {
+        for (const boxId in boxAssignments) {
+          if (boxAssignments[boxId].includes(p)) return false;
+        }
+        return true;
+      });
+    });
+    boxSelectValue = null;
+    refreshBoxSelect();
+    updateProjectList();
+    updateBoxContent();
+    boxDetailsDiv.textContent = '已載入分箱結果';
+  } catch (e) {
+    alert('讀取失敗: ' + e.message);
+  }
+});
+
+exportBtn.addEventListener('click', () => {
+  let csvContent = "箱號,標案名稱\n";
+  const sortedBoxes = Object.keys(boxAssignments).sort((a,b) => {
+    const [yA,nA] = a.split('-');
+    const [yB,nB] = b.split('-');
+    if (yA !== yB) return yA.localeCompare(yB);
+    return parseInt(nA) - parseInt(nB);
+  });
+
+  sortedBoxes.forEach(boxId => {
+    const projects = boxAssignments[boxId];
+    if (projects.length === 0) {
+      csvContent += `"${boxId}",\n`;
+    } else {
+      projects.forEach(p => {
+        csvContent += `"${boxId}","${p}"\n`;
+      });
+    }
+  });
+
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "分箱結果.csv";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+showBoxDetailsBtn.addEventListener('click', () => {
+  const box = boxSelectValue;
+  if (!box) {
+    boxDetailsDiv.textContent = '請先選擇箱號';
+    return;
+  }
+  const projects = boxAssignments[box] || [];
+  if (projects.length === 0) {
+    boxDetailsDiv.textContent = `箱號 ${box} 目前沒有標案內容`;
+  } else {
+    let text = `箱號 ${box} 標案內容:\n\n`;
+    projects.forEach((p,i) => {
+      text += `${i+1}. ${p}\n`;
+    });
+    boxDetailsDiv.textContent = text;
+  }
+});
+
+printPreviewBtn.addEventListener('click', () => {
+  const box = boxSelectValue;
+  if (!box) {
+    alert('請先選擇箱號');
+    return;
+  }
+  printBoxes([box]);
+});
+
+printAllBtn.addEventListener('click', () => {
+  const allBoxes = Object.keys(boxAssignments).sort((a,b) => {
+    const [yA,nA] = a.split('-');
+    const [yB,nB] = b.split('-');
+    if (yA !== yB) return yA.localeCompare(yB);
+    return parseInt(nA) - parseInt(nB);
+  });
+  printBoxes(allBoxes);
+});
+
+function printBoxes(boxList) {
+  let html = `<html><head><title>列印預覽</title><style>
+    body { font-family: Arial, "Microsoft JhengHei", sans-serif; margin: 20px; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    h2 { border-bottom: 2px solid #007BFF; padding-bottom: 5px; color: #007BFF; }
+    ul { margin-left: 20px; margin-bottom: 30px; }
+    li { font-size: 18px; padding: 3px 0; }
+  </style></head><body>`;
+  html += `<h1>分箱列印預覽</h1>`;
+  boxList.forEach(boxId => {
+    html += `<h2>箱號：${boxId}</h2><ul>`;
+    const projects = boxAssignments[boxId] || [];
+    if (projects.length === 0) {
+      html += `<li>無標案</li>`;
+    } else {
+      projects.forEach(p => {
+        html += `<li>${p}</li>`;
+      });
+    }
+    html += `</ul>`;
+  });
+  html += `</body></html>`;
+
+  const printFrame = document.getElementById("printFrame");
+  printFrame.srcdoc = html;
+  printFrame.onload = () => {
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+  };
+}
+
+// 匯入 CSV 分箱結果
+importCsvFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const text = ev.target.result;
+    parseCsvImport(text);
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+function parseCsvImport(csvText) {
+  // csvText 預期格式: 箱號,標案名稱
+  // 可能有 BOM 須處理
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) {
+    alert('CSV 檔案格式不正確');
+    return;
+  }
+  // 解析資料
+  let importedAssignments = {};
+  for(let i=1; i<lines.length; i++){
+    let line = lines[i];
+    // 簡單解析 CSV 引號包覆的欄位
+    let match = line.match(/^\s*"?(.*?)"?\s*,\s*"?(.*?)"?\s*$/);
+    if (!match) continue;
+    let boxId = match[1].trim();
+    let project = match[2].trim();
+    if (!boxId) continue;
+    if (!importedAssignments[boxId]) importedAssignments[boxId] = [];
+    if (project) importedAssignments[boxId].push(project);
+  }
+
+  if (Object.keys(importedAssignments).length === 0) {
+    alert('匯入資料為空');
+    return;
+  }
+
+  // 重新整理 yearData 與 boxAssignments
+  boxAssignments = importedAssignments;
+
+  // 將所有匯入標案抽出來，更新 yearData，把匯入標案從各年度標案清單移除
+  // 先取得所有匯入的標案名
+  let importedProjectsSet = new Set();
+  Object.values(importedAssignments).forEach(arr => arr.forEach(p => importedProjectsSet.add(p)));
+
+  // 將每年標案移除匯入的標案
+  Object.keys(yearData).forEach(y => {
+    yearData[y] = (yearData[y] || []).filter(p => !importedProjectsSet.has(p));
+  });
+
+  boxSelectValue = Object.keys(boxAssignments)[0] || null;
+  refreshBoxSelect();
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '已匯入 CSV 分箱結果';
+  importCsvFile.value = ''; // 重置input以便再次匯入
+}
+
+// 初始化載入年度標案
+loadYearData();
+
+</script>
+
+</body>
+</html>
