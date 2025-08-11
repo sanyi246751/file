@@ -1,303 +1,45 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>標案分箱工具（自動編號）</title>
-  <style>
-    /* 這邊用你之前的 CSS，也可自訂 */
-    body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: auto; }
-    select, button { margin: 5px; padding: 5px 10px; }
-    .top-controls { display: flex; gap: 40px; flex-wrap: wrap; }
-    .label-group { display: flex; flex-direction: column; }
-    .label-group > label { font-weight: 600; margin-bottom: 6px; }
-    #boxButtons { display: grid; grid-template-columns: repeat(5, minmax(80px,1fr)); gap: 8px; max-width: 400px; }
-    #boxButtons button { padding: 6px 8px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; border-radius: 5px; font-weight: 600; transition: 0.3s; }
-    #boxButtons button.selected { background: #007BFF; color: white; }
-    #boxButtons button:hover { background: #cce4ff; }
-    #boxActionButtons button { margin-right: 8px; padding: 6px 12px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; border-radius: 4px; font-weight: 600; }
-    #boxActionButtons button:hover { background: #007BFF; color: white; }
-    .container { display: flex; gap: 40px; margin-top: 20px; }
-    .box { border: 1px solid #ccc; padding: 12px; width: 45%; min-height: 300px; overflow-y: auto; }
-    ul { list-style: none; padding-left: 10px; }
-    li { padding: 4px 6px; margin: 4px 0; border-radius: 4px; cursor: pointer; }
-    li:hover { background: #e0e0e0; }
-    h3 { margin-top: 0; }
-    #functionButtons button { margin-right: 12px; margin-top: 20px; padding: 10px 15px; border-radius: 5px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; font-weight: 600; transition: 0.3s; }
-    #functionButtons button:hover { background: #007BFF; color: white; }
-    #statusMsg { margin-top: 16px; font-weight: 600; color: #333; min-height: 24px; }
-    #boxDetails { margin-top: 16px; font-family: monospace; white-space: pre-wrap; background: #f9f9f9; border: 1px solid #aaa; padding: 10px; max-height: 300px; overflow-y: auto; }
-    #importCsvFile { display: none; }
-  </style>
+<meta charset="UTF-8">
+<title>GAS CORS POST JSON 範例</title>
 </head>
 <body>
-
-<h2>標案分箱工具（自動編號，含民國年格式）</h2>
-
-<div class="top-controls">
-  <div class="label-group">
-    <label for="yearSelect">選擇年度：</label>
-    <select id="yearSelect"></select>
-  </div>
-
-  <div class="label-group">
-    <label>選擇箱號：</label>
-    <div id="boxButtons"></div>
-    <div id="boxActionButtons">
-      <button id="addBoxBtn">新增箱號</button>
-      <button id="delBoxBtn">刪除箱號</button>
-    </div>
-  </div>
-</div>
-
-<div class="container">
-  <div class="box">
-    <h3>年度標案名稱（點擊加入箱號）</h3>
-    <ul id="projectList"></ul>
-  </div>
-
-  <div class="box">
-    <h3>箱號內容（點擊退回年度標案）</h3>
-    <ul id="boxContent"></ul>
-  </div>
-</div>
-
-<div id="functionButtons">
-  <button id="saveBtn">存檔分箱結果</button>
-  <button id="loadBtn">讀取分箱結果</button>
-  <button id="showBoxDetailsBtn">列出箱號內容</button>
-  <button id="exportBtn">匯出分箱結果 CSV</button>
-  <button id="importBtn">匯入分箱結果 CSV</button>
-  <button id="printPreviewBtn">列印預覽</button>
-  <button id="printAllBtn">全部列印</button>
-  <input type="file" id="importCsvFile" accept=".csv" />
-</div>
-
-<div id="statusMsg"></div>
-<div id="boxDetails"></div>
+<h2>讀取 & 寫入 Google Sheet 測試</h2>
+<button id="getBtn">讀取標案資料</button>
+<button id="postBtn">寫入分箱結果</button>
+<pre id="output"></pre>
 
 <script>
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
-const ORIGIN = 'https://sanyi246751.github.io';
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
 
-const yearSelect = document.getElementById("yearSelect");
-const boxButtonsDiv = document.getElementById("boxButtons");
-const projectList = document.getElementById("projectList");
-const boxContent = document.getElementById("boxContent");
-const addBoxBtn = document.getElementById("addBoxBtn");
-const delBoxBtn = document.getElementById("delBoxBtn");
-const saveBtn = document.getElementById("saveBtn");
-const loadBtn = document.getElementById("loadBtn");
-const exportBtn = document.getElementById("exportBtn");
-const importBtn = document.getElementById("importBtn");
-const importCsvFile = document.getElementById("importCsvFile");
-const showBoxDetailsBtn = document.getElementById("showBoxDetailsBtn");
-const printPreviewBtn = document.getElementById("printPreviewBtn");
-const printAllBtn = document.getElementById("printAllBtn");
-const statusMsg = document.getElementById("statusMsg");
-const boxDetailsDiv = document.getElementById("boxDetails");
+// 讀取標案資料
+async function getData() {
+  const res = await fetch(GAS_URL);
+  const data = await res.json();
+  document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+}
 
-let yearData = {};       // { '106年': [...], '107年': [...] }
-let boxAssignments = {}; // { '106年-1': [...], '107年-2': [...] }
-let boxSelectValue = null;
+// 寫入分箱結果
+async function postData() {
+  const data = {
+    projectId: "A001",
+    boxNo: "B-12",
+    note: "測試資料"
+  };
 
-// fetch POST JSON 通用函式
-async function postJson(data) {
-  const resp = await fetch(GAS_URL, {
-    method: 'POST',
-    mode: 'cors',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
   });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
-  return await resp.json();
+
+  const json = await res.json();
+  document.getElementById("output").textContent = JSON.stringify(json, null, 2);
 }
 
-// 載入年度資料
-async function loadYearData() {
-  const res = await postJson({ action: 'loadData' });
-  if(res.status !== 'success') throw new Error(res.message || '載入失敗');
-  yearData = res.data;
-  populateYearSelect();
-}
-
-// 填充年度下拉選單
-function populateYearSelect() {
-  yearSelect.innerHTML = '';
-  Object.keys(yearData).sort((a,b) => a.localeCompare(b)).forEach(year => {
-    const opt = document.createElement('option');
-    opt.value = year;
-    opt.textContent = year;
-    yearSelect.appendChild(opt);
-  });
-
-  if (yearSelect.options.length > 0) {
-    yearSelect.value = yearSelect.options[0].value;
-    initializeBoxes(yearSelect.value);
-  }
-  updateProjectList();
-  updateBoxContent();
-  boxDetailsDiv.textContent = '';
-}
-
-// 初始化箱號，確保每年度至少有三箱
-function initializeBoxes(year) {
-  const existingBoxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-  if(existingBoxes.length === 0) {
-    for(let i=1; i<=3; i++) {
-      boxAssignments[`${year}-${i}`] = [];
-    }
-  }
-  if(!boxSelectValue || !boxAssignments[boxSelectValue]) {
-    boxSelectValue = Object.keys(boxAssignments).find(b => b.startsWith(year)) || null;
-  }
-  refreshBoxSelect();
-}
-
-// 更新箱號按鈕
-function refreshBoxSelect() {
-  const selectedYear = yearSelect.value;
-  boxButtonsDiv.innerHTML = '';
-
-  const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(selectedYear));
-  boxes.sort((a,b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1]));
-
-  boxes.forEach(boxId => {
-    const btn = document.createElement('button');
-    btn.textContent = boxId;
-    btn.classList.toggle('selected', boxId === boxSelectValue);
-    btn.addEventListener('click', async () => {
-      await onBoxButtonClick(boxId);
-    });
-    boxButtonsDiv.appendChild(btn);
-  });
-
-  if (!boxes.includes(boxSelectValue)) {
-    boxSelectValue = boxes[0] || null;
-  }
-  updateBoxButtonsHighlight();
-  updateBoxContent();
-}
-
-function updateBoxButtonsHighlight() {
-  [...boxButtonsDiv.children].forEach(btn => {
-    btn.classList.toggle('selected', btn.textContent === boxSelectValue);
-  });
-}
-
-// 更新年度標案列表
-function updateProjectList() {
-  const year = yearSelect.value;
-  const projects = yearData[year] || [];
-
-  projectList.innerHTML = '';
-  projects.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = p;
-    projectList.appendChild(li);
-  });
-}
-
-// 更新箱號內容
-function updateBoxContent() {
-  if (!boxSelectValue) {
-    boxContent.innerHTML = '';
-    return;
-  }
-  const projects = boxAssignments[boxSelectValue] || [];
-
-  boxContent.innerHTML = '';
-  projects.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = p;
-    boxContent.appendChild(li);
-  });
-}
-
-// 點擊年度標案加入箱號
-projectList.addEventListener('click', e => {
-  if(e.target.tagName !== 'LI') return;
-  const project = e.target.textContent;
-  const year = yearSelect.value;
-  const box = boxSelectValue;
-  if(!box) return alert('請先選擇箱號');
-
-  yearData[year] = yearData[year].filter(p => p !== project);
-  if(!boxAssignments[box]) boxAssignments[box] = [];
-  boxAssignments[box].push(project);
-
-  updateProjectList();
-  updateBoxContent();
-});
-
-// 點擊箱號內容退回年度標案
-boxContent.addEventListener('click', e => {
-  if(e.target.tagName !== 'LI') return;
-  const project = e.target.textContent;
-  const year = yearSelect.value;
-  const box = boxSelectValue;
-  if(!box) return alert('請先選擇箱號');
-
-  boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
-  if(!yearData[year]) yearData[year] = [];
-  yearData[year].push(project);
-
-  updateProjectList();
-  updateBoxContent();
-});
-
-// 年度切換時
-yearSelect.addEventListener('change', () => {
-  initializeBoxes(yearSelect.value);
-  updateProjectList();
-  updateBoxContent();
-  boxDetailsDiv.textContent = '';
-});
-
-// 新增箱號
-addBoxBtn.addEventListener('click', () => {
-  const year = yearSelect.value;
-  if(!year) return alert('請先選擇年度');
-  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-  const nextNum = boxesOfYear.length > 0 ? Math.max(...boxesOfYear.map(b => parseInt(b.split('-')[1]))) + 1 : 1;
-  const newBox = `${year}-${nextNum}`;
-  boxAssignments[newBox] = [];
-  boxSelectValue = newBox;
-  refreshBoxSelect();
-  updateBoxContent();
-});
-
-// 刪除箱號
-delBoxBtn.addEventListener('click', () => {
-  const year = yearSelect.value;
-  if(!year) return alert('請先選擇年度');
-  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year)).sort((a,b) => parseInt(b.split('-')[1]) - parseInt(a.split('-')[1]));
-  if(boxesOfYear.length === 0) return alert('目前無可刪除的箱號');
-  const delBox = boxesOfYear[0];
-  if(boxAssignments[delBox]) {
-    boxAssignments[delBox].forEach(p => {
-      if(!yearData[year]) yearData[year] = [];
-      yearData[year].push(p);
-    });
-    delete boxAssignments[delBox];
-  }
-  if(boxSelectValue === delBox) {
-    boxSelectValue = Object.keys(boxAssignments).find(b => b.startsWith(year)) || null;
-  }
-  refreshBoxSelect();
-  updateProjectList();
-  updateBoxContent();
-});
-
-// 存檔單一箱號分箱結果，避免大量資料一次存導致錯誤
-async function saveCurrentBoxAssignment() {
-  if(!boxSelectValue) {
-    statusMsg.textContent = '請先選擇箱號';
-    return false;
-  }
-  statusMsg.textContent = `儲存箱號 ${boxSelectValue} 中...`;
-  const projects = boxAssignments[boxSelectValue] || [];
-  try {
-    const res = await postJson({
-      action: 'saveSingleBox',
-      box: boxSelectValue,
-      projects: projects
+document.getElementById("getBtn").addEventListener("click", getData);
+document.getElementById("postBtn").addEventListener("click", postData);
+</script>
+</body>
+</html>
