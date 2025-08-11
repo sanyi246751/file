@@ -1,22 +1,21 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>GAS CORS 測試</title>
 </head>
 <body>
-<h1>GAS CORS 測試</h1>
-<button onclick="getData()">GET 資料</button>
-<button onclick="postData()">POST 資料</button>
+<button onclick="getData()">GET 測試</button>
+<button onclick="postData()">POST 測試</button>
 
 <script>
 const GAS_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
 
 async function getData() {
   try {
-    const res = await fetch(GAS_URL, { method: "GET" });
-    const data = await res.json();
-    console.log("GET 成功", data);
+    const res = await fetch(GAS_URL, { method: 'GET' });
+    const json = await res.json();
+    console.log("GET 成功：", json);
   } catch (err) {
     console.error("GET 錯誤：", err);
   }
@@ -24,14 +23,14 @@ async function getData() {
 
 async function postData() {
   try {
-    const payload = { id: "P001", name: "測試案", year: 2025, box: "B01" };
+    const payload = { name: "測試名稱", value: Math.random() };
     const res = await fetch(GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const result = await res.json();
-    console.log("POST 成功", result);
+    const json = await res.json();
+    console.log("POST 成功：", json);
   } catch (err) {
     console.error("POST 錯誤：", err);
   }
