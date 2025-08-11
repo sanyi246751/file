@@ -1,45 +1,49 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>GAS CORS POST JSON 範例</title>
+<title>GAS CORS 測試</title>
 </head>
 <body>
-<h2>讀取 & 寫入 Google Sheet 測試</h2>
-<button id="getBtn">讀取標案資料</button>
-<button id="postBtn">寫入分箱結果</button>
+<h1>GAS CORS 測試</h1>
+
+<button onclick="getData()">GET 資料</button>
+<button onclick="postData()">POST 資料</button>
+
 <pre id="output"></pre>
 
 <script>
-const GAS_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
 
-// 讀取標案資料
+// GET 範例
 async function getData() {
-  const res = await fetch(GAS_URL);
-  const data = await res.json();
-  document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'GET',
+      mode: 'cors'
+    });
+    const data = await res.json();
+    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-// 寫入分箱結果
+// POST 範例
 async function postData() {
-  const data = {
-    projectId: "A001",
-    boxNo: "B-12",
-    note: "測試資料"
-  };
-
-  const res = await fetch(GAS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
-
-  const json = await res.json();
-  document.getElementById("output").textContent = JSON.stringify(json, null, 2);
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '測試', value: Math.random() })
+    });
+    const data = await res.json();
+    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    console.error(err);
+  }
 }
-
-document.getElementById("getBtn").addEventListener("click", getData);
-document.getElementById("postBtn").addEventListener("click", postData);
 </script>
 </body>
 </html>
