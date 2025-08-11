@@ -1,49 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>GAS CORS 測試</title>
+  <meta charset="utf-8">
+  <title>GAS CORS 測試</title>
 </head>
 <body>
-<h1>GAS CORS 測試</h1>
+  <button onclick="getData()">讀取資料</button>
+  <button onclick="postData()">送出資料</button>
 
-<button onclick="getData()">GET 資料</button>
-<button onclick="postData()">POST 資料</button>
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
 
-<pre id="output"></pre>
+    async function getData() {
+      try {
+        let res = await fetch(API_URL, { method: "GET" });
+        let json = await res.json();
+        console.log("GET 成功：", json);
+      } catch (err) {
+        console.error("GET 錯誤：", err);
+      }
+    }
 
-<script>
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
-
-// GET 範例
-async function getData() {
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'GET',
-      mode: 'cors'
-    });
-    const data = await res.json();
-    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// POST 範例
-async function postData() {
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: '測試', value: Math.random() })
-    });
-    const data = await res.json();
-    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-  } catch (err) {
-    console.error(err);
-  }
-}
-</script>
+    async function postData() {
+      try {
+        let res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(["測試1", "測試2", new Date()])
+        });
+        let json = await res.json();
+        console.log("POST 成功：", json);
+      } catch (err) {
+        console.error("POST 錯誤：", err);
+      }
+    }
+  </script>
 </body>
 </html>
