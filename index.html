@@ -1,40 +1,187 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<title>GAS CORS 測試</title>
+<meta charset="UTF-8" />
+<title>標案分箱系統</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  #container { display: flex; gap: 20px; }
+  #biaoanList, #boxList { border: 1px solid #ccc; padding: 10px; width: 45%; height: 400px; overflow-y: auto; }
+  .item { padding: 5px; cursor: pointer; border-bottom: 1px solid #eee; }
+  .item:hover { background: #f0f0f0; }
+  h2 { margin-top: 0; }
+  button { margin: 5px 0; }
+</style>
 </head>
 <body>
-<button onclick="getData()">GET 測試</button>
-<button onclick="postData()">POST 測試</button>
+
+<h1>標案分箱系統</h1>
+<label for="yearSelect">年度：</label>
+<select id="yearSelect"></select>
+<button id="refreshBtn">重新整理</button>
+<button id="exportBtn">匯出分箱CSV</button>
+
+<div id="container">
+  <div>
+    <h2>未分箱標案 (點擊加入箱號)</h2>
+    <div id="biaoanList"></div>
+  </div>
+  <div>
+    <h2>分箱結果 (點擊標案退回)</h2>
+    <div id="boxList"></div>
+  </div>
+</div>
 
 <script>
-const GAS_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
+  const ORIGIN = window.location.origin;
 
-async function getData() {
-  try {
-    const res = await fetch(GAS_URL, { method: 'GET' });
-    const json = await res.json();
-    console.log("GET 成功：", json);
-  } catch (err) {
-    console.error("GET 錯誤：", err);
+  const yearSelect = document.getElementById('yearSelect');
+  const biaoanList = document.getElementById('biaoanList');
+  const boxList = document.getElementById('boxList');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const exportBtn = document.getElementById('exportBtn');
+
+  function fillYearOptions(){
+    const currentYear = new Date().getFullYear();
+    for(let y=currentYear-5; y<=currentYear+1; y++){
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
   }
-}
 
-async function postData() {
-  try {
-    const payload = { name: "測試名稱", value: Math.random() };
+  async function postJson(payload) {
     const res = await fetch(GAS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': ORIGIN,
+      },
       body: JSON.stringify(payload)
     });
-    const json = await res.json();
-    console.log("POST 成功：", json);
-  } catch (err) {
-    console.error("POST 錯誤：", err);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   }
-}
+
+  async function loadBiaoan() {
+    biaoanList.innerHTML = '讀取中...';
+    const year = yearSelect.value;
+    try {
+      const data = await postJson({ action: 'getBiaoanList', year });
+      if (data.error) {
+        biaoanList.textContent = '錯誤：' + data.error;
+        return;
+      }
+      if (data.length === 0) {
+        biaoanList.textContent = '無未分箱標案';
+        return;
+      }
+      biaoanList.innerHTML = '';
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.textContent = `${item.bid} - ${item.info[1] || '標案名稱未知'}`; // info[1]是標案名稱欄位，請依實際調整
+        div.onclick = () => addToBox(item.bid);
+        biaoanList.appendChild(div);
+      });
+    } catch (e) {
+      biaoanList.textContent = '讀取失敗：' + e.message;
+    }
+  }
+
+  async function loadBoxes() {
+    boxList.innerHTML = '讀取中...';
+    const year = yearSelect.value;
+    try {
+      const data = await postJson({ action: 'getFenxiangList', year });
+      if (data.error) {
+        boxList.textContent = '錯誤：' + data.error;
+        return;
+      }
+      boxList.innerHTML = '';
+      // data 格式 { "2025-1": [ {bid, name}, ... ], ... }
+      for (const boxNo in data) {
+        const boxDiv = document.createElement('div');
+        boxDiv.style.border = '1px solid #aaa';
+        boxDiv.style.margin = '5px 0';
+        boxDiv.style.padding = '5px';
+        boxDiv.innerHTML = `<strong>箱號: ${boxNo}</strong>`;
+        data[boxNo].forEach(item => {
+          const itemDiv = document.createElement('div');
+          itemDiv.className = 'item';
+          itemDiv.textContent = `${item.bid} - ${item.name}`;
+          itemDiv.style.paddingLeft = '15px';
+          itemDiv.onclick = () => removeFromBox(item.bid);
+          boxDiv.appendChild(itemDiv);
+        });
+        boxList.appendChild(boxDiv);
+      }
+    } catch(e) {
+      boxList.textContent = '讀取失敗：' + e.message;
+    }
+  }
+
+  async function addToBox(bid) {
+    const year = yearSelect.value;
+    try {
+      const result = await postJson({ action: 'addToBox', year, bid });
+      if (result.error) {
+        alert('錯誤：' + result.error);
+      } else {
+        await refreshAll();
+      }
+    } catch(e) {
+      alert('新增失敗：' + e.message);
+    }
+  }
+
+  async function removeFromBox(bid) {
+    const year = yearSelect.value;
+    try {
+      const result = await postJson({ action: 'removeFromBox', year, bid });
+      if (result.error) {
+        alert('錯誤：' + result.error);
+      } else {
+        await refreshAll();
+      }
+    } catch(e) {
+      alert('移除失敗：' + e.message);
+    }
+  }
+
+  async function exportCSV() {
+    const year = yearSelect.value;
+    try {
+      const result = await postJson({ action: 'exportCSV', year });
+      if (result.error) {
+        alert('錯誤：' + result.error);
+      } else {
+        const blob = new Blob([result.csv], {type: 'text/csv;charset=utf-8'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `分箱結果_${year}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    } catch(e) {
+      alert('匯出失敗：' + e.message);
+    }
+  }
+
+  async function refreshAll() {
+    await loadBiaoan();
+    await loadBoxes();
+  }
+
+  refreshBtn.onclick = refreshAll;
+  exportBtn.onclick = exportCSV;
+
+  fillYearOptions();
+  refreshAll();
+
 </script>
 </body>
 </html>
