@@ -1,39 +1,47 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>GAS CORS 測試</title>
+<meta charset="UTF-8">
+<title>GAS CORS 測試</title>
 </head>
 <body>
-  <button onclick="getData()">讀取資料</button>
-  <button onclick="postData()">送出資料</button>
+<h2>GAS CORS 測試</h2>
 
-  <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
+<button onclick="getData()">讀取資料（GET）</button>
+<button onclick="postData()">寫入資料（POST）</button>
 
-    async function getData() {
-      try {
-        let res = await fetch(API_URL, { method: "GET" });
-        let json = await res.json();
-        console.log("GET 成功：", json);
-      } catch (err) {
-        console.error("GET 錯誤：", err);
-      }
-    }
+<pre id="output"></pre>
 
-    async function postData() {
-      try {
-        let res = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(["測試1", "測試2", new Date()])
-        });
-        let json = await res.json();
-        console.log("POST 成功：", json);
-      } catch (err) {
-        console.error("POST 錯誤：", err);
-      }
-    }
-  </script>
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec";
+
+async function getData() {
+  try {
+    const res = await fetch(API_URL, { method: "GET" });
+    if (!res.ok) throw new Error(`HTTP 錯誤 ${res.status}`);
+    const data = await res.json();
+    document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    console.error("GET 錯誤：", err);
+  }
+}
+
+async function postData() {
+  const payload = { id: "001", name: "測試名稱", value: "測試數值" };
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`HTTP 錯誤 ${res.status}`);
+    const result = await res.json();
+    document.getElementById("output").textContent = JSON.stringify(result, null, 2);
+  } catch (err) {
+    console.error("POST 錯誤：", err);
+  }
+}
+</script>
 </body>
 </html>
