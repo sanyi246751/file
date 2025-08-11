@@ -2,355 +2,441 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>標案分箱工具（POST JSON）</title>
+  <title>標案分箱工具（Fetch + POST JSON）</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 20px; }
+    body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: auto; }
     select, button { margin: 5px; padding: 5px 10px; }
-    #statusMsg { margin-top: 16px; font-weight: bold; }
-    ul { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; list-style:none; }
-    li { cursor: pointer; padding: 4px; }
-    li:hover { background: #eee; }
-    #boxButtons button { margin: 3px; padding: 6px 12px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; border-radius: 4px; }
+    .top-controls { display: flex; gap: 40px; flex-wrap: wrap; }
+    .label-group { display: flex; flex-direction: column; }
+    .label-group > label { font-weight: 600; margin-bottom: 6px; }
+    #boxButtons { display: grid; grid-template-columns: repeat(5, minmax(80px,1fr)); gap: 8px; max-width: 400px; }
+    #boxButtons button { padding: 6px 8px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; border-radius: 5px; font-weight: 600; transition: 0.3s; }
     #boxButtons button.selected { background: #007BFF; color: white; }
+    #boxButtons button:hover { background: #cce4ff; }
+    #boxActionButtons button { margin-right: 8px; padding: 6px 12px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; border-radius: 4px; font-weight: 600; }
+    #boxActionButtons button:hover { background: #007BFF; color: white; }
+    .container { display: flex; gap: 40px; margin-top: 20px; }
+    .box { border: 1px solid #ccc; padding: 12px; width: 45%; min-height: 300px; overflow-y: auto; }
+    ul { list-style: none; padding-left: 10px; }
+    li { padding: 4px 6px; margin: 4px 0; border-radius: 4px; cursor: pointer; }
+    li:hover { background: #e0e0e0; }
+    h3 { margin-top: 0; }
+    #functionButtons button { margin-right: 12px; margin-top: 20px; padding: 10px 15px; border-radius: 5px; border: 1px solid #007BFF; background: white; color: #007BFF; cursor: pointer; font-weight: 600; transition: 0.3s; }
+    #functionButtons button:hover { background: #007BFF; color: white; }
+    #statusMsg { margin-top: 16px; font-weight: 600; color: #333; min-height: 24px; }
+    #boxDetails { margin-top: 16px; font-family: monospace; white-space: pre-wrap; background: #f9f9f9; border: 1px solid #aaa; padding: 10px; max-height: 300px; overflow-y: auto; }
+    #importCsvFile { display: none; }
   </style>
 </head>
 <body>
-  <h2>標案分箱工具（POST JSON）</h2>
 
-  <label for="yearSelect">選擇年度：</label>
-  <select id="yearSelect"></select>
+<h2>標案分箱工具（Fetch POST JSON）</h2>
 
-  <h3>年度標案（點擊加入箱號）</h3>
-  <ul id="projectList"></ul>
-
-  <h3>箱號管理</h3>
-  <div id="boxButtons"></div>
-  <button id="addBoxBtn">新增箱號</button>
-  <button id="delBoxBtn">刪除箱號</button>
-
-  <h3>箱號內容（點擊退回年度標案）</h3>
-  <ul id="boxContent"></ul>
-
-  <div>
-    <button id="loadBtn">讀取分箱結果</button>
-    <button id="saveBtn">存檔分箱結果</button>
-    <button id="exportBtn">匯出 CSV</button>
-    <input type="file" id="importCsvFile" accept=".csv" style="display:none;" />
-    <button id="importBtn">匯入 CSV</button>
+<div class="top-controls">
+  <div class="label-group">
+    <label for="yearSelect">選擇年度：</label>
+    <select id="yearSelect"></select>
   </div>
 
-  <div id="statusMsg"></div>
+  <div class="label-group">
+    <label>選擇箱號：</label>
+    <div id="boxButtons"></div>
+    <div id="boxActionButtons">
+      <button id="addBoxBtn">新增箱號</button>
+      <button id="delBoxBtn">刪除箱號</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="box">
+    <h3>年度標案名稱（點擊加入箱號）</h3>
+    <ul id="projectList"></ul>
+  </div>
+
+  <div class="box">
+    <h3>箱號內容（點擊退回年度標案）</h3>
+    <ul id="boxContent"></ul>
+  </div>
+</div>
+
+<div id="functionButtons">
+  <button id="saveBtn">存檔分箱結果</button>
+  <button id="loadBtn">讀取分箱結果</button>
+  <button id="showBoxDetailsBtn">列出箱號內容</button>
+  <button id="exportBtn">匯出分箱結果 CSV</button>
+  <button id="importBtn">匯入分箱結果 CSV</button>
+  <input type="file" id="importCsvFile" accept=".csv" style="display:none;" />
+  <button id="printPreviewBtn">列印預覽</button>
+  <button id="printAllBtn">全部列印</button>
+</div>
+
+<div id="statusMsg"></div>
+<div id="boxDetails"></div>
 
 <script>
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw63c4akixbo2-yIRwgNGpOHjxSna_jg298B-n6ypNH3Nmc1xONQXc820Emsa5H0mto_Q/exec';
 
-  const yearSelect = document.getElementById('yearSelect');
-  const projectList = document.getElementById('projectList');
-  const boxButtonsDiv = document.getElementById('boxButtons');
-  const addBoxBtn = document.getElementById('addBoxBtn');
-  const delBoxBtn = document.getElementById('delBoxBtn');
-  const boxContent = document.getElementById('boxContent');
-  const loadBtn = document.getElementById('loadBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  const exportBtn = document.getElementById('exportBtn');
-  const importBtn = document.getElementById('importBtn');
-  const importCsvFile = document.getElementById('importCsvFile');
-  const statusMsg = document.getElementById('statusMsg');
+const yearSelect = document.getElementById("yearSelect");
+const boxButtonsDiv = document.getElementById("boxButtons");
+const projectList = document.getElementById("projectList");
+const boxContent = document.getElementById("boxContent");
+const addBoxBtn = document.getElementById("addBoxBtn");
+const delBoxBtn = document.getElementById("delBoxBtn");
+const saveBtn = document.getElementById("saveBtn");
+const loadBtn = document.getElementById("loadBtn");
+const exportBtn = document.getElementById("exportBtn");
+const importBtn = document.getElementById("importBtn");
+const importCsvFile = document.getElementById("importCsvFile");
+const showBoxDetailsBtn = document.getElementById("showBoxDetailsBtn");
+const printPreviewBtn = document.getElementById("printPreviewBtn");
+const printAllBtn = document.getElementById("printAllBtn");
+const statusMsg = document.getElementById("statusMsg");
+const boxDetailsDiv = document.getElementById("boxDetails");
 
-  let yearData = {};
-  let boxAssignments = {};
-  let boxSelectValue = null;
+let yearData = {};       // { '106年': [...], '107年': [...] }
+let boxAssignments = {}; // { '106年-1': [...], '107年-2': [...] }
+let boxSelectValue = null;
 
-  async function postJson(action, payload = {}) {
-    payload.action = action;
-    const resp = await fetch(GAS_URL, {
+// 用 fetch POST JSON 的封裝函數
+async function postJson(action, data = {}) {
+  data.action = action;
+  try {
+    const response = await fetch(GAS_URL, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      mode: 'cors'
     });
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    if(data.status !== 'success') throw new Error(data.message || '伺服器錯誤');
-    return data.data;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    throw new Error('Fetch error: ' + err.message);
   }
+}
 
-  // 載入年度資料
-  async function loadYearData() {
-    statusMsg.textContent = '載入年度資料中...';
-    yearData = await postJson('loadData');
-    populateYearSelect();
-    statusMsg.textContent = '年度資料載入完成';
+// 載入年度資料
+async function loadYearData() {
+  statusMsg.textContent = '載入年度資料中...';
+  try {
+    const res = await postJson('loadData');
+    if(res.status === 'success') {
+      yearData = res.data;
+      populateYearSelect();
+      statusMsg.textContent = '年度資料載入完成';
+    } else {
+      throw new Error(res.message || '讀取失敗');
+    }
+  } catch (e) {
+    statusMsg.textContent = '載入年度資料失敗: ' + e.message;
   }
+}
 
-  // 填充年度下拉
-  function populateYearSelect() {
-    yearSelect.innerHTML = '';
-    Object.keys(yearData).sort().forEach(y => {
-      const opt = document.createElement('option');
-      opt.value = y;
-      opt.textContent = y;
-      yearSelect.appendChild(opt);
-    });
-    if(yearSelect.options.length > 0){
-      yearSelect.value = yearSelect.options[0].value;
-      initializeBoxes(yearSelect.value);
-      updateProjectList();
-      updateBoxContent();
+// 填充年度下拉選單
+function populateYearSelect() {
+  yearSelect.innerHTML = '';
+  Object.keys(yearData).sort((a,b) => a.localeCompare(b)).forEach(year => {
+    const opt = document.createElement('option');
+    opt.value = year;
+    opt.textContent = year;
+    yearSelect.appendChild(opt);
+  });
+
+  if (yearSelect.options.length > 0) {
+    yearSelect.value = yearSelect.options[0].value;
+    initializeBoxes(yearSelect.value);
+  }
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+}
+
+// 初始化箱號，確保每年度至少有三箱
+function initializeBoxes(year) {
+  const existingBoxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
+  if(existingBoxes.length === 0) {
+    for(let i=1; i<=3; i++) {
+      boxAssignments[`${year}-${i}`] = [];
     }
   }
-
-  // 初始化箱號，至少三個
-  function initializeBoxes(year) {
-    const existingBoxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-    if(existingBoxes.length === 0) {
-      for(let i=1; i<=3; i++) {
-        boxAssignments[`${year}-${i}`] = [];
-      }
-    }
+  if(!boxSelectValue || !boxAssignments[boxSelectValue]) {
     boxSelectValue = Object.keys(boxAssignments).find(b => b.startsWith(year)) || null;
-    refreshBoxButtons();
   }
+  refreshBoxSelect();
+}
 
-  function refreshBoxButtons() {
-    const year = yearSelect.value;
-    boxButtonsDiv.innerHTML = '';
-    const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-    boxes.sort((a,b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1]));
-    boxes.forEach(boxId => {
-      const btn = document.createElement('button');
-      btn.textContent = boxId;
-      btn.classList.toggle('selected', boxId === boxSelectValue);
-      btn.onclick = async () => {
-        if(boxId === boxSelectValue) return;
-        const saved = await saveCurrentBoxAssignment();
-        if(saved) {
-          boxSelectValue = boxId;
-          refreshBoxButtons();
-          updateBoxContent();
-          updateProjectList();
-        } else {
-          alert('儲存失敗，無法切換箱號');
-        }
-      };
-      boxButtonsDiv.appendChild(btn);
+// 更新箱號按鈕
+function refreshBoxSelect() {
+  const selectedYear = yearSelect.value;
+  boxButtonsDiv.innerHTML = '';
+
+  const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(selectedYear));
+  boxes.sort((a,b) => parseInt(a.split('-')[1]) - parseInt(b.split('-')[1]));
+
+  boxes.forEach(boxId => {
+    const btn = document.createElement('button');
+    btn.textContent = boxId;
+    btn.classList.toggle('selected', boxId === boxSelectValue);
+    btn.addEventListener('click', async () => {
+      await onBoxButtonClick(boxId);
     });
-  }
+    boxButtonsDiv.appendChild(btn);
+  });
 
-  // 更新年度標案清單
-  function updateProjectList() {
-    const year = yearSelect.value;
-    const projects = yearData[year] || [];
-    projectList.innerHTML = '';
-    projects.forEach(p => {
-      const li = document.createElement('li');
-      li.textContent = p;
-      li.onclick = () => {
-        if(!boxSelectValue) {
-          alert('請先選擇箱號');
-          return;
-        }
-        // 從年資料移除
-        yearData[year] = yearData[year].filter(x => x !== p);
-        // 加入箱號
-        if(!boxAssignments[boxSelectValue]) boxAssignments[boxSelectValue] = [];
-        boxAssignments[boxSelectValue].push(p);
-        updateProjectList();
-        updateBoxContent();
-      };
-      projectList.appendChild(li);
-    });
+  if (!boxes.includes(boxSelectValue)) {
+    boxSelectValue = boxes[0] || null;
   }
+  updateBoxButtonsHighlight();
+  updateBoxContent();
+}
 
-  // 更新箱號內容清單
-  function updateBoxContent() {
-    if(!boxSelectValue) {
-      boxContent.innerHTML = '';
-      return;
-    }
-    const projects = boxAssignments[boxSelectValue] || [];
+function updateBoxButtonsHighlight() {
+  [...boxButtonsDiv.children].forEach(btn => {
+    btn.classList.toggle('selected', btn.textContent === boxSelectValue);
+  });
+}
+
+// 更新年度標案列表
+function updateProjectList() {
+  const year = yearSelect.value;
+  const projects = yearData[year] || [];
+
+  projectList.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    projectList.appendChild(li);
+  });
+}
+
+// 更新箱號內容
+function updateBoxContent() {
+  if (!boxSelectValue) {
     boxContent.innerHTML = '';
-    projects.forEach(p => {
-      const li = document.createElement('li');
-      li.textContent = p;
-      li.onclick = () => {
-        // 從箱號移除
-        boxAssignments[boxSelectValue] = boxAssignments[boxSelectValue].filter(x => x !== p);
-        // 加回年資料
-        const year = boxSelectValue.split('-')[0];
-        if(!yearData[year]) yearData[year] = [];
-        yearData[year].push(p);
-        updateProjectList();
-        updateBoxContent();
-      };
-      boxContent.appendChild(li);
-    });
+    return;
   }
+  const projects = boxAssignments[boxSelectValue] || [];
 
-  // 新增箱號
-  addBoxBtn.onclick = () => {
-    const year = yearSelect.value;
-    if(!year) return alert('請先選擇年度');
-    const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-    let maxNum = 0;
-    boxes.forEach(b => {
-      const n = parseInt(b.split('-')[1]);
-      if(n > maxNum) maxNum = n;
-    });
-    const newBox = `${year}-${maxNum + 1}`;
-    boxAssignments[newBox] = [];
-    boxSelectValue = newBox;
-    refreshBoxButtons();
-    updateBoxContent();
-  };
+  boxContent.innerHTML = '';
+  projects.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = p;
+    boxContent.appendChild(li);
+  });
+}
 
-  // 刪除箱號（會把箱內標案退回該年）
-  delBoxBtn.onclick = () => {
-    const year = yearSelect.value;
-    if(!year) return alert('請先選擇年度');
-    const boxes = Object.keys(boxAssignments).filter(b => b.startsWith(year));
-    if(boxes.length === 0) return alert('沒有箱號可刪除');
-    // 預設刪最後一個
-    boxes.sort((a,b) => parseInt(b.split('-')[1]) - parseInt(a.split('-')[1]));
-    const delBox = boxes[0];
-    if(boxAssignments[delBox]) {
-      const projects = boxAssignments[delBox];
+// 點擊年度標案加入箱號
+projectList.addEventListener('click', e => {
+  if(e.target.tagName !== 'LI') return;
+  const project = e.target.textContent;
+  const year = yearSelect.value;
+  const box = boxSelectValue;
+  if(!box) return alert('請先選擇箱號');
+
+  yearData[year] = yearData[year].filter(p => p !== project);
+  if(!boxAssignments[box]) boxAssignments[box] = [];
+  boxAssignments[box].push(project);
+
+  updateProjectList();
+  updateBoxContent();
+});
+
+// 點擊箱號內容退回年度標案
+boxContent.addEventListener('click', e => {
+  if(e.target.tagName !== 'LI') return;
+  const project = e.target.textContent;
+  const year = yearSelect.value;
+  const box = boxSelectValue;
+  if(!box) return alert('請先選擇箱號');
+
+  boxAssignments[box] = boxAssignments[box].filter(p => p !== project);
+  if(!yearData[year]) yearData[year] = [];
+  yearData[year].push(project);
+
+  updateProjectList();
+  updateBoxContent();
+});
+
+// 年度切換時
+yearSelect.addEventListener('change', () => {
+  initializeBoxes(yearSelect.value);
+  updateProjectList();
+  updateBoxContent();
+  boxDetailsDiv.textContent = '';
+});
+
+// 新增箱號
+addBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if(!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year));
+  const nextNum = boxesOfYear.length > 0 ? Math.max(...boxesOfYear.map(b => parseInt(b.split('-')[1]))) + 1 : 1;
+  const newBox = `${year}-${nextNum}`;
+  boxAssignments[newBox] = [];
+  boxSelectValue = newBox;
+  refreshBoxSelect();
+  updateBoxContent();
+});
+
+// 刪除箱號
+delBoxBtn.addEventListener('click', () => {
+  const year = yearSelect.value;
+  if(!year) return alert('請先選擇年度');
+  const boxesOfYear = Object.keys(boxAssignments).filter(b => b.startsWith(year)).sort((a,b) => parseInt(b.split('-')[1]) - parseInt(a.split('-')[1]));
+  if(boxesOfYear.length === 0) return alert('目前無可刪除的箱號');
+  const delBox = boxesOfYear[0];
+  if(boxAssignments[delBox]) {
+    boxAssignments[delBox].forEach(p => {
       if(!yearData[year]) yearData[year] = [];
-      yearData[year].push(...projects);
-      delete boxAssignments[delBox];
-    }
-    if(boxSelectValue === delBox) {
-      boxSelectValue = Object.keys(boxAssignments).find(b => b.startsWith(year)) || null;
-    }
-    refreshBoxButtons();
-    updateProjectList();
-    updateBoxContent();
-  };
-
-  // 存檔單一箱號
-  async function saveCurrentBoxAssignment() {
-    if(!boxSelectValue) {
-      statusMsg.textContent = '請先選擇箱號';
-      return false;
-    }
-    statusMsg.textContent = `儲存箱號 ${boxSelectValue} 中...`;
-    try {
-      const projects = boxAssignments[boxSelectValue] || [];
-      await postJson('saveSingleBox', {box: boxSelectValue, projects});
-      statusMsg.textContent = `儲存箱號 ${boxSelectValue} 成功`;
-      return true;
-    } catch(e) {
-      statusMsg.textContent = '儲存失敗: ' + e.message;
-      return false;
-    }
+      yearData[year].push(p);
+    });
+    delete boxAssignments[delBox];
   }
+  if(boxSelectValue === delBox) {
+    boxSelectValue = Object.keys(boxAssignments).find(b => b.startsWith(year)) || null;
+  }
+  refreshBoxSelect();
+  updateProjectList();
+  updateBoxContent();
+});
 
-  // 存檔全部箱號
-  async function saveAllBoxes() {
-    statusMsg.textContent = '開始存檔所有箱號，請稍候...';
-    const boxes = Object.keys(boxAssignments);
-    for(const box of boxes){
-      boxSelectValue = box;
-      refreshBoxButtons();
+// 存檔分箱結果
+saveBtn.addEventListener('click', async () => {
+  statusMsg.textContent = '存檔中...';
+  try {
+    const promises = Object.entries(boxAssignments).map(([box, projects]) =>
+      postJson('saveSingleBox', { box, projects })
+    );
+    await Promise.all(promises);
+    statusMsg.textContent = '存檔完成';
+  } catch (e) {
+    statusMsg.textContent = '存檔失敗: ' + e.message;
+  }
+});
+
+// 讀取分箱結果
+loadBtn.addEventListener('click', async () => {
+  statusMsg.textContent = '讀取分箱結果中...';
+  try {
+    const res = await postJson('loadAssignments');
+    if(res.status === 'success') {
+      boxAssignments = res.data || {};
+      refreshBoxSelect();
       updateBoxContent();
       updateProjectList();
-      const ok = await saveCurrentBoxAssignment();
-      if(!ok) {
-        statusMsg.textContent = `存檔失敗：箱號 ${box}`;
-        return;
-      }
-    }
-    statusMsg.textContent = '全部箱號存檔完成';
-  }
-
-  // 讀取分箱結果
-  async function loadBoxAssignments() {
-    statusMsg.textContent = '讀取分箱結果中...';
-    try {
-      boxAssignments = await postJson('loadAssignments');
       statusMsg.textContent = '分箱結果讀取完成';
-      const year = yearSelect.value;
-      if(year) {
-        initializeBoxes(year);
-        updateBoxContent();
-        updateProjectList();
-      }
-    } catch(e) {
-      statusMsg.textContent = '讀取分箱結果失敗: ' + e.message;
+    } else {
+      throw new Error(res.message || '讀取失敗');
     }
+  } catch (e) {
+    statusMsg.textContent = '讀取分箱結果失敗: ' + e.message;
   }
+});
 
-  // 匯出 CSV
-  exportBtn.onclick = () => {
-    let csv = '"箱號","標案名稱"\r\n';
-    Object.entries(boxAssignments).forEach(([box, projects]) => {
-      projects.forEach(p => {
-        csv += `"${box}","${p.replace(/"/g, '""')}"\r\n`;
-      });
+// 列出箱號內容 (console 或頁面)
+showBoxDetailsBtn.addEventListener('click', () => {
+  let output = '';
+  for (const [box, projects] of Object.entries(boxAssignments)) {
+    output += `${box}:\n  ${projects.join('\n  ')}\n\n`;
+  }
+  boxDetailsDiv.textContent = output || '沒有分箱內容';
+});
+
+// 匯出 CSV
+exportBtn.addEventListener('click', () => {
+  let csv = '箱號,標案名稱\n';
+  for (const [box, projects] of Object.entries(boxAssignments)) {
+    projects.forEach(p => {
+      csv += `"${box}","${p.replace(/"/g, '""')}"\n`;
     });
-    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '分箱結果.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // 匯入 CSV
-  importBtn.onclick = () => importCsvFile.click();
-
-  importCsvFile.onchange = e => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = evt => {
-      const text = evt.target.result;
-      parseCsvAndLoadAssignments(text);
-    };
-    reader.readAsText(file, 'UTF-8');
-    importCsvFile.value = null;
-  };
-
-  function parseCsvAndLoadAssignments(csvText) {
-    const lines = csvText.split(/\r?\n/).filter(l => l.trim() !== '');
-    if(lines.length < 2) {
-      alert('CSV 格式錯誤或無資料');
-      return;
-    }
-    const assignments = {};
-    for(let i=1; i<lines.length; i++){
-      // 用簡單逗號拆分(簡單版，不考慮逗號在引號內)
-      const parts = lines[i].split(',');
-      if(parts.length < 2) continue;
-      const box = parts[0].replace(/^"|"$/g, '').trim();
-      const project = parts[1].replace(/^"|"$/g, '').trim();
-      if(!assignments[box]) assignments[box] = [];
-      assignments[box].push(project);
-    }
-    boxAssignments = assignments;
-    // 匯入後重整
-    const year = yearSelect.value;
-    if(year) initializeBoxes(year);
-    updateBoxContent();
-    updateProjectList();
-    statusMsg.textContent = '匯入完成，請記得存檔';
   }
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `分箱結果_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+});
 
-  yearSelect.onchange = () => {
-    const year = yearSelect.value;
-    initializeBoxes(year);
-    updateProjectList();
-    updateBoxContent();
+// 匯入 CSV
+importBtn.addEventListener('click', () => {
+  importCsvFile.click();
+});
+
+importCsvFile.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const text = evt.target.result;
+    parseAndImportCsv(text);
   };
+  reader.readAsText(file, 'UTF-8');
+});
 
-  loadBtn.onclick = loadBoxAssignments;
-  saveBtn.onclick = saveAllBoxes;
+function parseAndImportCsv(csvText) {
+  const lines = csvText.split(/\r?\n/);
+  const newAssignments = {};
+  for(let i=1; i<lines.length; i++) {
+    if(!lines[i].trim()) continue;
+    // 簡易 CSV 解析
+    let [box, project] = lines[i].split(/,(.+)/);
+    if (!box || !project) continue;
+    box = box.replace(/^"|"$/g, '').trim();
+    project = project.replace(/^"|"$/g, '').trim();
+    if (!newAssignments[box]) newAssignments[box] = [];
+    newAssignments[box].push(project);
+  }
+  // 匯入後覆蓋
+  boxAssignments = newAssignments;
+  refreshBoxSelect();
+  updateBoxContent();
+  statusMsg.textContent = '匯入完成';
+}
 
-  // 啟動時載入年度資料與分箱結果
-  (async () => {
-    await loadYearData();
-    await loadBoxAssignments();
-  })();
+// 列印預覽（只列出當前選箱號內容）
+printPreviewBtn.addEventListener('click', () => {
+  if (!boxSelectValue) return alert('請先選擇箱號');
+  const content = boxAssignments[boxSelectValue] || [];
+  if (content.length === 0) return alert('該箱無標案內容');
+  const win = window.open('', '_blank');
+  win.document.write('<h1>列印預覽 - ' + boxSelectValue + '</h1><ul>');
+  content.forEach(p => {
+    win.document.write('<li>' + p + '</li>');
+  });
+  win.document.write('</ul>');
+  win.document.close();
+  win.focus();
+  win.print();
+});
+
+// 全部列印（全部箱號內容）
+printAllBtn.addEventListener('click', () => {
+  const win = window.open('', '_blank');
+  win.document.write('<h1>全部分箱內容</h1>');
+  for (const [box, projects] of Object.entries(boxAssignments)) {
+    win.document.write('<h3>' + box + '</h3><ul>');
+    projects.forEach(p => {
+      win.document.write('<li>' + p + '</li>');
+    });
+    win.document.write('</ul>');
+  }
+  win.document.close();
+  win.focus();
+  win.print();
+});
+
+// 點擊箱號按鈕事件
+async function onBoxButtonClick(boxId) {
+  if(boxSelectValue === boxId) return;
+  boxSelectValue = boxId;
+  updateBoxButtonsHighlight();
+  updateBoxContent();
+}
+
+(async () => {
+  await loadYearData();
+})();
 </script>
+
 </body>
 </html>
