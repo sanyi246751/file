@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>標案分類管理</title>
+<style>
+body { font-family:"Microsoft JhengHei", sans-serif; background:#eef2f5; padding:20px; color:#333; margin:0; }
+h2 { margin-bottom:10px; color:#2c3e50; }
+.status { margin-bottom:15px; padding:8px 12px; background:#f1f2f6; border-radius:6px; font-size:14px; color:#333; box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.toolbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+.left-controls, .right-controls { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+select, button { padding:6px 12px; font-size:14px; border-radius:6px; border:none; cursor:pointer; transition:0.2s; }
+button { background:#3498db; color:#fff; }
+button:hover { background:#2980b9; }
+button:disabled { background:#bdc3c7; cursor:not-allowed; }
+.year-box { background:#fff; color:#333; border:1px solid #ccc; padding:6px 10px; display:flex; align-items:center; border-radius:6px; cursor:pointer; transition:0.2s; box-shadow:0 1px 2px rgba(0,0,0,0.05);}
+.year-box:hover { background:#f0f0f0; }
+.year-box.selected { background:#3498db; color:#fff; border-color:#3498db; font-weight:bold; }
+.year-box span.delete { margin-left:5px; color:red; cursor:pointer; font-weight:bold; }
+.main { display:flex; gap:20px; }
+.sidebar, .content { background:#fff; padding:15px; border-radius:8px; flex:1; box-shadow:0 2px 5px rgba(0,0,0,0.1); min-height:400px; }
+.sidebar h3, .content h3 { margin-top:0; color:#2c3e50; }
+.drop-zone { min-height:150px; border:2px dashed #ccc; padding:10px; margin-top:10px; background:#fafafa; border-radius:6px; transition:0.2s; }
+.drop-zone.highlight { background:#d0ebff; border-color:#3498db; }
+.item { background:#fff; border:1px solid #d1d8e0; padding:6px 10px; margin-bottom:6px; cursor:grab; display:flex; justify-content:space-between; align-items:center; border-radius:6px; transition:0.2s; }
+.item:hover { background:#d0ebff; }
+.item:active { cursor:grabbing; }
+.item-btn { margin-left:6px; font-size:12px; padding:2px 5px; border-radius:4px; border:none; cursor:pointer; transition:0.2s; }
+.item-btn.add { background:#27ae60; color:#fff; }
+.item-btn.back { background:#f39c12; color:#fff; }
+</style>
+</head>
+<body>
+
+<h2>🏗️ 標案分類管理</h2>
+<div class="status" id="statusBar">初始化中...</div>
+
+<div class="toolbar">
+  <div class="left-controls">
+    <select id="yearSelect" onchange="changeYear()"></select>
+    <button onclick="newGroup()">＋ 新增分箱</button>
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <button onclick="printPreview()">🖨️ 預覽列印</button>
+    <button onclick="printAll()">🖨️ 全部列印</button>
+  </div>
+  <div class="right-controls" id="yearBoxes"></div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h3>未分類</h3>
+    <div class="drop-zone" id="unassignedDrop" ondragover="allowDrop(event)" ondrop="onDrop(event,'unassigned')"></div>
+  </div>
+  <div class="content">
+    <h3 id="activeBoxTitle">未選擇分箱</h3>
+    <div class="drop-zone" id="activeBoxDrop" ondragover="allowDrop(event)" ondrop="onDropActive(event)"></div>
+  </div>
+</div>
+
+<script>
+const SAVE_URL = "https://script.google.com/macros/s/AKfycbxJzve7fNO6WZfgEkOASAdsLUBnO9uJuGMlhkQ66giglv0FLBvNRQQ8o4gl3RN_eIVT/exec";
+
+let state = {};
+let bids = [];
+let currentYear = null;
+let activeGroupIdx = null;
+
+function updateStatus(msg){ document.getElementById("statusBar").textContent = msg; }
+
+async function startup(){
+  updateStatus("讀取資料...");
+  try {
+    const res = await fetch(SAVE_URL);
+    if(!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    state = json.data || {};
+    bids = json.bids || [];
+  } catch(e){
+    console.error("讀取資料失敗", e);
+    updateStatus("❌ 標案資料或 data 讀取失敗");
+    alert("讀取標案資料失敗，請確認 GAS 部署與權限");
+    return;
+  }
+
+  let years = Object.keys(state);
+  if(years.length === 0 && bids.length>0){
+    years = Object.keys(bids[0]).filter(k=>k!=="年度"&&k.trim());
+    years.forEach(y=>state[y] = {groups:[], unassigned:[]});
+  }
+
+  years.forEach(y=>{
+    const allItems = bids.map(r=>r[y]?r[y].toString().trim():null).filter(Boolean);
+    const used = new Set();
+    state[y].groups.forEach(g=>g.items.forEach(i=>used.add(i)));
+    state[y].unassigned = allItems.filter(i=>!used.has(i));
+  });
+
+  const sel = document.getElementById("yearSelect");
+  sel.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join("");
+  currentYear = years[0];
+  renderYearBoxes();
+  render();
+  updateStatus("初始化完成");
+}
+
+function renderYearBoxes(){
+  const container = document.getElementById("yearBoxes");
+  container.innerHTML = "";
+  state[currentYear].groups.forEach((g,idx)=>{
+    const box = document.createElement("div");
+    box.className="year-box"; 
+    if(activeGroupIdx===idx) box.classList.add("selected");
+    box.onclick=()=>{ activeGroupIdx=idx; render(); };
+    box.innerHTML=`分箱 ${g.name} <span class="delete" onclick="deleteGroupConfirm(event,${idx})">❌</span>`;
+    container.appendChild(box);
+  });
+}
+
+function deleteGroupConfirm(e, idx){
+  e.stopPropagation();
+  deleteGroup(idx);
+}
+
+function render(){
+  const ua=document.getElementById("unassignedDrop");
+  ua.innerHTML="";
+  state[currentYear].unassigned.forEach(i=>ua.appendChild(buildItem(i,"unassigned")));
+
+  const title = document.getElementById("activeBoxTitle");
+  const activeDrop = document.getElementById("activeBoxDrop");
+  activeDrop.innerHTML="";
+
+  if(activeGroupIdx===null){
+    title.textContent="未選擇分箱";
+  } else {
+    const g = state[currentYear].groups[activeGroupIdx];
+    title.textContent=g.name;
+    g.items.forEach(itm=>activeDrop.appendChild(buildItem(itm,activeGroupIdx)));
+  }
+
+  renderYearBoxes();
+}
+
+function allowDrop(e){ e.preventDefault(); }
+function dragStart(e,name){ e.dataTransfer.setData("text",name); }
+function onDrop(e,target){
+  e.preventDefault();
+  const name = e.dataTransfer.getData("text");
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups.forEach(g=>g.items=g.items.filter(i=>i!==name));
+  if(target==="unassigned") state[currentYear].unassigned.push(name);
+  else state[currentYear].groups[target].items.push(name);
+  render();
+}
+function onDropActive(e){
+  if(activeGroupIdx===null){ alert("請先選擇分箱"); return; }
+  e.preventDefault();
+  const name = e.dataTransfer.getData("text");
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups.forEach(g=>g.items=g.items.filter(i=>i!==name));
+  state[currentYear].groups[activeGroupIdx].items.push(name);
+  render();
+}
+
+function buildItem(name, idx){
+  const div=document.createElement("div");
+  div.className="item"; div.draggable=true;
+  div.ondragstart=e=>dragStart(e,name);
+  const span=document.createElement("span"); span.textContent=name; div.appendChild(span);
+
+  const btn=document.createElement("button");
+  if(idx==="unassigned"){
+    btn.className="item-btn add"; btn.innerHTML="➕";
+    btn.onclick=e=>{ e.stopPropagation(); moveToActiveGroup(name); };
+    div.onclick=e=>{ moveToActiveGroup(name); };
+  } else {
+    btn.className="item-btn back"; btn.innerHTML="↩";
+    btn.onclick=e=>{ e.stopPropagation(); moveToUnassigned(name,idx); };
+    div.onclick=e=>{ moveToUnassigned(name,idx); };
+  }
+  div.appendChild(btn);
+  return div;
+}
+
+function moveToActiveGroup(name){
+  if(activeGroupIdx===null){ alert("請先選擇分箱"); return; }
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups[activeGroupIdx].items.push(name);
+  render();
+}
+
+function moveToUnassigned(name, idx){
+  state[currentYear].groups[idx].items = state[currentYear].groups[idx].items.filter(i=>i!==name);
+  state[currentYear].unassigned.push(name);
+  render();
+}
+
+function newGroup(){
+  const existingNumbers = state[currentYear].groups.map(g=>{
+    const m=g.name.match(new RegExp(`^${currentYear}-(\\d+)$`));
+    return m?parseInt(m[1]):null;
+  }).filter(Boolean);
+  let n=1; while(existingNumbers.includes(n)) n++;
+  state[currentYear].groups.push({name:`${currentYear}-${n}`, items:[]});
+  render();
+}
+
+function deleteGroup(idx){
+  if(!confirm("刪除分類？分類內標案會回到未分類")) return;
+  state[currentYear].unassigned.push(...state[currentYear].groups[idx].items);
+  state[currentYear].groups.splice(idx,1);
+  state[currentYear].groups.forEach((g,i)=>{ g.name=`${currentYear}-${i+1}`; });
+  if(activeGroupIdx===idx) activeGroupIdx=null;
+  render();
+}
+
+function changeYear(){ currentYear=yearSelect.value; activeGroupIdx=null; render(); }
+
+function save(){
+  const btn=document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="儲存中...";
+  fetch(SAVE_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(state)})
+    .finally(()=>{ btn.disabled=false; btn.textContent="💾 儲存"; updateStatus("資料已儲存"); });
+}
+
+/* 列印功能保持不變 */
+function printPreview(){ printPreviewFormatted(false); }
+function printAll(){ printPreviewFormatted(true); }
+function printPreviewFormatted(printAll=false){
+  const year = currentYear;
+  if(!year) return alert("請先選擇年度");
+  const boxAssignments = {};
+  state[year].groups.forEach(g=>boxAssignments[g.name]=g.items);
+
+  let targetBoxes;
+  if(printAll){
+    const boxes=Object.keys(boxAssignments).sort((a,b)=>parseInt(a.split('-')[1])-parseInt(b.split('-')[1]));
+    if(boxes.length===0) return alert("目前無分箱資料可列印");
+    targetBoxes=boxes;
+  } else {
+    if(activeGroupIdx===null) return alert("請先選擇分箱");
+    targetBoxes=[state[year].groups[activeGroupIdx].name];
+  }
+
+  let html=`<html><head><title>分箱結果列印</title><style>
+  @page { size:A4 landscape; margin:20mm 15mm 25mm 15mm; }
+  body{font-family:"Microsoft JhengHei"; color:#222; margin:0; padding:0 15mm;}
+  .page{page-break-after:always; padding-bottom:20px; border-bottom:2px solid #bbb;}
+  h1{font-size:24pt; font-weight:900;text-align:center;margin:0;padding-bottom:4px;border-bottom:2px solid #005a9e;color:#005a9e;}
+  .date{font-size:14pt;color:#555;text-align:center;margin:8px 0 16px 0;font-weight:600;}
+  h3{font-size:23pt;font-weight:700;color:#003f72;margin-bottom:25px;}
+  ul{list-style-type:disc;padding-left:50px;font-size:22pt;line-height:1.3;margin-top:0;margin-bottom:30px;}
+  ul li{margin-bottom:12px;}
+  p.no-projects{font-size:20pt;font-style:italic;color:#999;margin-bottom:50px;text-align:center;}
+  </style></head><body>`;
+  html+=`<h1>苗栗縣三義鄉公所</h1>`;
+  const today=new Date();
+  html+=`<div class="date">列印日期：${today.getFullYear()-1911}年${today.getMonth()+1}月${today.getDate()}日</div>`;
+
+  targetBoxes.forEach(box=>{
+    const projects=boxAssignments[box]||[];
+    html+=`<div class="page"><h3>箱號：${box}</h3>`;
+    if(projects.length>0) html+=`<ul>${projects.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+    else html+=`<p class="no-projects">（此箱無標案資料）</p>`;
+    html+=`</div>`;
+  });
+
+  html+=`</body></html>`;
+  const w=window.open('','_blank'); w.document.write(html); w.document.close(); w.focus(); w.print();
+}
+
+startup();
+</script>
+</body>
+</html>

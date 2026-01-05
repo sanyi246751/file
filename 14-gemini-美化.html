@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>🏗️ 標案分類管理系統</title>
+<style>
+  :root {
+    --primary-color: #4a90e2;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --danger-color: #e74c3c;
+    --bg-color: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-main: #2c3e50;
+    --text-sub: #7f8c8d;
+    --border-radius: 12px;
+    --shadow: 0 4px 6px rgba(0,0,0,0.05);
+  }
+
+  body { 
+    font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
+    background: var(--bg-color); 
+    padding: 30px; 
+    color: var(--text-main);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  h2 { 
+    font-size: 28px; 
+    font-weight: 700; 
+    margin-top: 0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* 狀態列美化 */
+  .status { 
+    background: var(--card-bg);
+    padding: 10px 20px; 
+    border-radius: 50px; 
+    font-size: 14px; 
+    margin-bottom: 25px; 
+    display: inline-block;
+    box-shadow: var(--shadow);
+    border-left: 5px solid var(--primary-color);
+  }
+
+  /* 工具列美化 */
+  .toolbar { 
+    background: var(--card-bg); 
+    padding: 15px 20px; 
+    border-radius: var(--border-radius); 
+    margin-bottom: 25px; 
+    display: flex; 
+    flex-wrap: wrap; 
+    align-items: center; 
+    gap: 15px; 
+    justify-content: space-between; 
+    box-shadow: var(--shadow);
+  }
+
+  .left-controls { display: flex; align-items: center; gap: 10px; }
+  
+  select { 
+    padding: 8px 15px; 
+    border-radius: 8px; 
+    border: 1px solid #ddd;
+    font-size: 15px;
+    outline: none;
+  }
+
+  button { 
+    padding: 8px 18px; 
+    border-radius: 8px; 
+    border: none; 
+    font-weight: 600;
+    cursor: pointer; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  button:active { transform: scale(0.95); }
+  
+  /* 按鈕顏色分類 */
+  button { background: var(--primary-color); color: white; }
+  button:hover { background: #357abd; box-shadow: 0 4px 12px rgba(74,144,226,0.3); }
+  #saveBtn { background: var(--success-color); }
+  #saveBtn:hover { background: #27ae60; box-shadow: 0 4px 12px rgba(46,204,113,0.3); }
+  button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* 分箱標籤美化 */
+  .right-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .year-box { 
+    background: #edf2f7; 
+    color: var(--text-main); 
+    border: 1px solid #e2e8f0; 
+    padding: 6px 14px; 
+    display: flex; 
+    align-items: center; 
+    border-radius: 20px; 
+    cursor: pointer; 
+    transition: all 0.2s;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .year-box:hover { background: #e2e8f0; transform: translateY(-2px); }
+  .year-box.selected { 
+    background: var(--primary-color); 
+    color: white; 
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 10px rgba(74,144,226,0.2);
+  }
+  .year-box .delete { 
+    margin-left: 8px; 
+    font-size: 12px;
+    opacity: 0.6;
+    transition: 0.2s;
+  }
+  .year-box .delete:hover { opacity: 1; color: #ffeb3b; }
+
+  /* 主區域佈局 */
+  .main { display: flex; gap: 25px; align-items: stretch; }
+  .sidebar, .content { 
+    background: var(--card-bg); 
+    padding: 20px; 
+    border-radius: var(--border-radius); 
+    flex: 1; 
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  h3 { 
+    margin-top: 0; 
+    font-size: 20px; 
+    border-bottom: 2px solid #f0f2f5; 
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+    color: var(--primary-color);
+  }
+
+  /* 拖曳區域美化 */
+  .drop-zone { 
+    flex-grow: 1;
+    min-height: 400px; 
+    border: 2px dashed #e2e8f0; 
+    border-radius: 10px;
+    padding: 15px; 
+    background: #fafbfc; 
+    transition: all 0.3s; 
+  }
+  .drop-zone.highlight { 
+    background: #eef6ff; 
+    border-color: var(--primary-color);
+    box-shadow: inset 0 0 10px rgba(74,144,226,0.1);
+  }
+
+  /* 標案項目美化 */
+  .item { 
+    background: #fff; 
+    border: 1px solid #e2e8f0; 
+    padding: 12px 16px; 
+    margin-bottom: 10px; 
+    border-radius: 8px;
+    cursor: grab; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  }
+  .item:hover { 
+    border-color: var(--primary-color);
+    transform: translateX(5px);
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.05);
+  }
+  .item:active { cursor: grabbing; }
+
+  .item-btn { 
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .item-btn.add { background: #e8f5e9; color: var(--success-color); }
+  .item-btn.add:hover { background: var(--success-color); color: white; }
+  .item-btn.back { background: #fff3e0; color: var(--warning-color); }
+  .item-btn.back:hover { background: var(--warning-color); color: white; }
+
+</style>
+</head>
+<body>
+
+<h2>🏗️ 標案分類管理</h2>
+<div class="status" id="statusBar">🚀 初始化中...</div>
+
+<div class="toolbar">
+  <div class="left-controls">
+    <select id="yearSelect" onchange="changeYear()"></select>
+    <button onclick="newGroup()"><span>＋</span> 新增分箱</button>
+    <button id="saveBtn" onclick="save()"><span>💾</span> 儲存資料</button>
+    <button onclick="printPreview()" style="background:#9b59b6"><span>🖨️</span> 預覽列印</button>
+    <button onclick="printAll()" style="background:#8e44ad"><span>📚</span> 全部列印</button>
+  </div>
+  <div class="right-controls" id="yearBoxes"></div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h3>📦 未分類標案</h3>
+    <div class="drop-zone" id="unassignedDrop" ondragover="allowDrop(event)" ondrop="onDrop(event,'unassigned')" ondragenter="this.classList.add('highlight')" ondragleave="this.classList.remove('highlight')"></div>
+  </div>
+  <div class="content">
+    <h3 id="activeBoxTitle">🔍 未選擇分箱</h3>
+    <div class="drop-zone" id="activeBoxDrop" ondragover="allowDrop(event)" ondrop="onDropActive(event)" ondragenter="this.classList.add('highlight')" ondragleave="this.classList.remove('highlight')"></div>
+  </div>
+</div>
+
+<script>
+// 此處完整保留您原本的 JS 代碼邏輯，不做任何功能性改動
+const SAVE_URL = "https://script.google.com/macros/s/AKfycbxJzve7fNO6WZfgEkOASAdsLUBnO9uJuGMlhkQ66giglv0FLBvNRQQ8o4gl3RN_eIVT/exec";
+
+let state = {};
+let bids = [];
+let currentYear = null;
+let activeGroupIdx = null;
+
+function updateStatus(msg){ document.getElementById("statusBar").textContent = msg; }
+
+async function startup(){
+  updateStatus("📡 讀取資料中...");
+  try {
+    const res = await fetch(SAVE_URL);
+    if(!res.ok) throw new Error(res.status);
+    const json = await res.json();
+    state = json.data || {};
+    bids = json.bids || [];
+  } catch(e){
+    console.error("讀取資料失敗", e);
+    updateStatus("❌ 讀取失敗，請確認網路或權限");
+    alert("讀取標案資料失敗");
+    return;
+  }
+
+  let years = Object.keys(state);
+  if(years.length === 0 && bids.length>0){
+    years = Object.keys(bids[0]).filter(k=>k!=="年度"&&k.trim());
+    years.forEach(y=>state[y] = {groups:[], unassigned:[]});
+  }
+
+  years.forEach(y=>{
+    const allItems = bids.map(r=>r[y]?r[y].toString().trim():null).filter(Boolean);
+    const used = new Set();
+    state[y].groups.forEach(g=>g.items.forEach(i=>used.add(i)));
+    state[y].unassigned = allItems.filter(i=>!used.has(i));
+  });
+
+  const sel = document.getElementById("yearSelect");
+  sel.innerHTML = years.map(y=>`<option value="${y}">${y} 年度</option>`).join("");
+  currentYear = years[0];
+  renderYearBoxes();
+  render();
+  updateStatus("✅ 系統已就緒");
+}
+
+function renderYearBoxes(){
+  const container = document.getElementById("yearBoxes");
+  container.innerHTML = "";
+  if(!state[currentYear]) return;
+  state[currentYear].groups.forEach((g,idx)=>{
+    const box = document.createElement("div");
+    box.className="year-box"; 
+    if(activeGroupIdx===idx) box.classList.add("selected");
+    box.onclick=()=>{ activeGroupIdx=idx; render(); };
+    box.innerHTML=`分箱 ${g.name} <span class="delete" onclick="deleteGroupConfirm(event,${idx})">✕</span>`;
+    container.appendChild(box);
+  });
+}
+
+function deleteGroupConfirm(e, idx){
+  e.stopPropagation();
+  deleteGroup(idx);
+}
+
+function render(){
+  const ua=document.getElementById("unassignedDrop");
+  ua.innerHTML="";
+  ua.classList.remove('highlight');
+  state[currentYear].unassigned.forEach(i=>ua.appendChild(buildItem(i,"unassigned")));
+
+  const title = document.getElementById("activeBoxTitle");
+  const activeDrop = document.getElementById("activeBoxDrop");
+  activeDrop.innerHTML="";
+  activeDrop.classList.remove('highlight');
+
+  if(activeGroupIdx===null){
+    title.textContent="🔍 請先選擇或新增一個分箱";
+  } else {
+    const g = state[currentYear].groups[activeGroupIdx];
+    title.textContent= "📁 分箱：" + g.name;
+    g.items.forEach(itm=>activeDrop.appendChild(buildItem(itm,activeGroupIdx)));
+  }
+  renderYearBoxes();
+}
+
+function allowDrop(e){ e.preventDefault(); }
+function dragStart(e,name){ e.dataTransfer.setData("text",name); }
+
+function onDrop(e,target){
+  e.preventDefault();
+  const name = e.dataTransfer.getData("text");
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups.forEach(g=>g.items=g.items.filter(i=>i!==name));
+  if(target==="unassigned") state[currentYear].unassigned.push(name);
+  else state[currentYear].groups[target].items.push(name);
+  render();
+}
+
+function onDropActive(e){
+  if(activeGroupIdx===null){ alert("請先選擇分箱"); return; }
+  e.preventDefault();
+  const name = e.dataTransfer.getData("text");
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups.forEach(g=>g.items=g.items.filter(i=>i!==name));
+  state[currentYear].groups[activeGroupIdx].items.push(name);
+  render();
+}
+
+function buildItem(name, idx){
+  const div=document.createElement("div");
+  div.className="item"; div.draggable=true;
+  div.ondragstart=e=>dragStart(e,name);
+  const span=document.createElement("span"); span.textContent=name; div.appendChild(span);
+
+  const btn=document.createElement("button");
+  if(idx==="unassigned"){
+    btn.className="item-btn add"; btn.innerHTML="＋";
+    btn.onclick=e=>{ e.stopPropagation(); moveToActiveGroup(name); };
+    div.onclick=e=>{ moveToActiveGroup(name); };
+  } else {
+    btn.className="item-btn back"; btn.innerHTML="↩";
+    btn.onclick=e=>{ e.stopPropagation(); moveToUnassigned(name,idx); };
+    div.onclick=e=>{ moveToUnassigned(name,idx); };
+  }
+  div.appendChild(btn);
+  return div;
+}
+
+function moveToActiveGroup(name){
+  if(activeGroupIdx===null){ alert("請先選擇或新增一個分箱"); return; }
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups[activeGroupIdx].items.push(name);
+  render();
+}
+
+function moveToUnassigned(name, idx){
+  state[currentYear].groups[idx].items = state[currentYear].groups[idx].items.filter(i=>i!==name);
+  state[currentYear].unassigned.push(name);
+  render();
+}
+
+function newGroup(){
+  const existingNumbers = state[currentYear].groups.map(g=>{
+    const m=g.name.match(new RegExp(`^${currentYear}-(\\d+)$`));
+    return m?parseInt(m[1]):null;
+  }).filter(Boolean);
+  let n=1; while(existingNumbers.includes(n)) n++;
+  state[currentYear].groups.push({name:`${currentYear}-${n}`, items:[]});
+  render();
+}
+
+function deleteGroup(idx){
+  if(!confirm("確定要刪除此分類？分類內的標案會移回未分類。")) return;
+  state[currentYear].unassigned.push(...state[currentYear].groups[idx].items);
+  state[currentYear].groups.splice(idx,1);
+  state[currentYear].groups.forEach((g,i)=>{ g.name=`${currentYear}-${i+1}`; });
+  if(activeGroupIdx===idx) activeGroupIdx=null;
+  render();
+}
+
+function changeYear(){ currentYear=document.getElementById("yearSelect").value; activeGroupIdx=null; render(); }
+
+function save(){
+  const btn=document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="正在儲存...";
+  fetch(SAVE_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(state)})
+    .finally(()=>{ btn.disabled=false; btn.textContent="💾 儲存資料"; updateStatus("✅ 資料已成功儲存至雲端"); });
+}
+
+function printPreview(){ printPreviewFormatted(false); }
+function printAll(){ printPreviewFormatted(true); }
+function printPreviewFormatted(allMode=false){
+  const year = currentYear;
+  if(!year) return alert("請先選擇年度");
+  const boxAssignments = {};
+  state[year].groups.forEach(g=>boxAssignments[g.name]=g.items);
+
+  let targetBoxes;
+  if(allMode){
+    const boxes=Object.keys(boxAssignments).sort((a,b)=>parseInt(a.split('-')[1])-parseInt(b.split('-')[1]));
+    if(boxes.length===0) return alert("目前無分箱資料可列印");
+    targetBoxes=boxes;
+  } else {
+    if(activeGroupIdx===null) return alert("請先選擇分箱");
+    targetBoxes=[state[year].groups[activeGroupIdx].name];
+  }
+
+  let html=`<html><head><title>列印分箱結果</title><style>
+  @page { size:A4 landscape; margin:20mm 15mm; }
+  body{font-family:"Microsoft JhengHei"; color:#222; margin:0; padding:0 15mm;}
+  .page{page-break-after:always; padding-bottom:20px; border-bottom:1px solid #eee;}
+  h1{font-size:24pt; font-weight:900;text-align:center;margin:0;padding-bottom:10px;border-bottom:3px solid #005a9e;color:#005a9e;}
+  .date{font-size:12pt;color:#666;text-align:right;margin-top:10px;}
+  h3{font-size:22pt;font-weight:700;color:#003f72;background:#f0f7ff;padding:10px;border-left:8px solid #005a9e;}
+  ul{list-style-type:decimal;padding-left:50px;font-size:18pt;line-height:1.5;}
+  ul li{margin-bottom:10px;}
+  p.no-projects{font-size:18pt;color:#999;text-align:center;margin-top:50px;}
+  </style></head><body>`;
+  
+  const today=new Date();
+  const dateStr = `${today.getFullYear()-1911}年${today.getMonth()+1}月${today.getDate()}日`;
+
+  targetBoxes.forEach(box=>{
+    const projects=boxAssignments[box]||[];
+    html+=`<div class="page">
+      <h1>苗栗縣三義鄉公所</h1>
+      <div class="date">列印日期：${dateStr}</div>
+      <h3>箱號：${box}</h3>`;
+    if(projects.length>0) html+=`<ul>${projects.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+    else html+=`<p class="no-projects">（此箱目前無標案資料）</p>`;
+    html+=`</div>`;
+  });
+
+  html+=`</body></html>`;
+  const w=window.open('','_blank'); w.document.write(html); w.document.close();
+}
+
+startup();
+</script>
+</body>
+</html>
