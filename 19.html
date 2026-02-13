@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏗️ 標案分類管理系統</title>
+<style>
+  :root {
+    --primary-color: #4a90e2;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --danger-color: #e74c3c;
+    --bg-color: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-main: #2c3e50;
+    --border-radius: 12px;
+    --shadow: 0 4px 6px rgba(0,0,0,0.05);
+  }
+
+  body { 
+    font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
+    background: var(--bg-color); padding: 15px; color: var(--text-main); line-height: 1.6; margin: 0;
+  }
+
+  h2 { font-size: 22px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+
+  .status { 
+    background: var(--card-bg); padding: 8px 15px; border-radius: 50px; font-size: 13px; 
+    margin-bottom: 15px; display: inline-block; box-shadow: var(--shadow); border-left: 5px solid var(--primary-color);
+  }
+
+  /* 工具列 */
+  .toolbar { 
+    background: var(--card-bg); padding: 15px; border-radius: var(--border-radius); 
+    margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow);
+  }
+
+  .left-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .right-controls { 
+    display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;
+  }
+
+  select, button { padding: 10px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 14px; }
+  select { border: 1px solid #ddd; background: white; }
+  button { cursor: pointer; color: white; background: var(--primary-color); white-space: nowrap; }
+  #saveBtn { background: var(--success-color); }
+  button:active { transform: scale(0.95); }
+
+  .year-box { 
+    background: #edf2f7; padding: 8px 15px; border-radius: 20px; cursor: pointer; 
+    font-size: 14px; flex: 0 0 auto; white-space: nowrap;
+  }
+  .year-box.selected { background: var(--primary-color); color: white; border: 1px solid var(--primary-color); }
+
+  /* 主區域佈局 (手機優先：分箱結果優先顯示) */
+  .main { display: flex; flex-direction: column; gap: 15px; }
+  .sidebar { order: 2; } 
+  .content { order: 1; } 
+
+  .sidebar, .content { background: var(--card-bg); padding: 15px; border-radius: var(--border-radius); box-shadow: var(--shadow); }
+  h3 { 
+    margin-top: 0; font-size: 18px; color: var(--primary-color); border-bottom: 2px solid #f0f2f5; 
+    padding-bottom: 10px; display: flex; align-items: center; justify-content: space-between;
+  }
+
+  /* 數量標籤動畫 */
+  .count-badge {
+    background: var(--danger-color); color: white; min-width: 24px; height: 24px;
+    padding: 0 8px; border-radius: 12px; font-size: 14px; font-weight: bold;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .count-badge.bump { transform: scale(1.4); }
+
+  .drop-zone { min-height: 200px; border: 2px dashed #e2e8f0; border-radius: 10px; padding: 10px; background: #fafbfc; }
+
+  .item { 
+    background: #fff; border: 1px solid #e2e8f0; padding: 12px 15px; margin-bottom: 8px; 
+    border-radius: 8px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .item-btn { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; border:none; cursor:pointer;}
+
+  /* 電腦版樣式覆蓋 (寬度 > 992px) */
+  @media (min-width: 992px) {
+    body { padding: 30px; }
+    .toolbar { flex-direction: row; justify-content: space-between; align-items: center; }
+    .main { flex-direction: row; }
+    .sidebar { order: 1; flex: 1; }
+    .content { order: 2; flex: 1; }
+    .drop-zone { min-height: 500px; }
+  }
+
+  #backToTop {
+    position: fixed; bottom: 20px; right: 20px; width: 45px; height: 45px; 
+    background: var(--primary-color); color: white; border-radius: 50%; 
+    border: none; display: none; justify-content: center; align-items: center; z-index: 100;
+  }
+</style>
+</head>
+<body>
+
+<h2>🏗️ 標案分類管理</h2>
+<div class="status" id="statusBar">🚀 初始化中...</div>
+
+<div class="toolbar">
+  <div class="left-controls">
+    <select id="yearSelect" onchange="changeYear()"></select>
+    <button onclick="newGroup()">＋ 新增分箱</button>
+    <button id="saveBtn" onclick="save()">💾 儲存</button>
+    <button onclick="printPreview()" style="background:#9b59b6">🖨️ 預覽</button>
+    <button onclick="printAll()" style="background:#8e44ad">📚 全部列印</button>
+  </div>
+  <div class="right-controls" id="yearBoxes"></div>
+</div>
+
+<div class="main">
+  <div class="content">
+    <h3 id="activeBoxTitle">🔍 未選擇分箱</h3>
+    <div class="drop-zone" id="activeBoxDrop" ondragover="allowDrop(event)" ondrop="onDropActive(event)"></div>
+  </div>
+
+  <div class="sidebar">
+    <h3>
+      <span>📦 未分類標案</span>
+      <span id="unassignedCount" class="count-badge">0</span>
+    </h3>
+    <div class="drop-zone" id="unassignedDrop" ondragover="allowDrop(event)" ondrop="onDrop(event,'unassigned')"></div>
+  </div>
+</div>
+
+<button id="backToTop" onclick="window.scrollTo({top:0, behavior:'smooth'})">↑</button>
+
+<script>
+const SAVE_URL = "https://script.google.com/macros/s/AKfycbxJzve7fNO6WZfgEkOASAdsLUBnO9uJuGMlhkQ66giglv0FLBvNRQQ8o4gl3RN_eIVT/exec";
+let state = {}, bids = [], currentYear = null, activeGroupIdx = null;
+
+function updateStatus(msg){ document.getElementById("statusBar").textContent = msg; }
+
+function updateCount(newCount) {
+  const badge = document.getElementById("unassignedCount");
+  if (badge.textContent !== newCount.toString()) {
+    badge.textContent = newCount;
+    badge.classList.add("bump");
+    setTimeout(() => badge.classList.remove("bump"), 200);
+  }
+}
+
+async function startup(){
+  updateStatus("📡 讀取資料中...");
+  try {
+    const res = await fetch(SAVE_URL);
+    const json = await res.json();
+    state = json.data || {};
+    bids = json.bids || [];
+  } catch(e){ updateStatus("❌ 讀取失敗"); return; }
+
+  let years = Object.keys(state);
+  if(years.length === 0 && bids.length>0){
+    years = Object.keys(bids[0]).filter(k=>k!=="年度"&&k.trim());
+    years.forEach(y=>state[y] = {groups:[], unassigned:[]});
+  }
+
+  years.forEach(y=>{
+    const allItems = bids.map(r=>r[y]?r[y].toString().trim():null).filter(Boolean);
+    const used = new Set();
+    state[y].groups.forEach(g=>g.items.forEach(i=>used.add(i)));
+    state[y].unassigned = allItems.filter(i=>!used.has(i));
+  });
+
+  const sel = document.getElementById("yearSelect");
+  sel.innerHTML = years.map(y=>`<option value="${y}">${y}度</option>`).join("");
+  currentYear = years[0];
+  render();
+  updateStatus("✅ 系統已就緒");
+}
+
+function render(){
+  const uaItems = state[currentYear].unassigned;
+  const uaZone = document.getElementById("unassignedDrop");
+  uaZone.innerHTML="";
+  updateCount(uaItems.length);
+  uaItems.forEach(i=>uaZone.appendChild(buildItem(i,"unassigned")));
+
+  const title = document.getElementById("activeBoxTitle");
+  const activeDrop = document.getElementById("activeBoxDrop");
+  activeDrop.innerHTML="";
+
+  if(activeGroupIdx===null){
+    title.textContent="🔍 請點選上方標籤選取分箱";
+  } else {
+    const g = state[currentYear].groups[activeGroupIdx];
+    title.textContent= "📁 分箱：" + g.name;
+    g.items.forEach(itm=>activeDrop.appendChild(buildItem(itm,activeGroupIdx)));
+  }
+  renderYearBoxes();
+}
+
+function renderYearBoxes(){
+  const container = document.getElementById("yearBoxes");
+  container.innerHTML = "";
+  if(!state[currentYear]) return;
+  state[currentYear].groups.forEach((g,idx)=>{
+    const box = document.createElement("div");
+    box.className=`year-box ${activeGroupIdx===idx?'selected':''}`; 
+    box.onclick=()=>{ activeGroupIdx=idx; render(); };
+    box.innerHTML=`${g.name} <span style="margin-left:5px; opacity:0.5" onclick="deleteGroupConfirm(event,${idx})">✕</span>`;
+    container.appendChild(box);
+  });
+}
+
+function buildItem(name, idx){
+  const div=document.createElement("div"); div.className="item"; div.draggable=true;
+  div.ondragstart=e=>e.dataTransfer.setData("text",name);
+  const span=document.createElement("span"); span.textContent=name; span.style.flex="1"; div.appendChild(span);
+  const btn=document.createElement("button");
+  if(idx==="unassigned"){
+    btn.className="item-btn"; btn.style.background="#e8f5e9"; btn.style.color="#2ecc71"; btn.innerHTML="＋";
+    div.onclick=()=>moveToActiveGroup(name);
+  } else {
+    btn.className="item-btn"; btn.style.background="#fff3e0"; btn.style.color="#f39c12"; btn.innerHTML="↩";
+    div.onclick=()=>moveToUnassigned(name,idx);
+  }
+  div.appendChild(btn);
+  return div;
+}
+
+function moveToActiveGroup(name){
+  if(activeGroupIdx===null){ alert("請先選取分箱標籤"); return; }
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
+  state[currentYear].groups[activeGroupIdx].items.push(name);
+  render();
+}
+
+function moveToUnassigned(name, idx){
+  state[currentYear].groups[idx].items = state[currentYear].groups[idx].items.filter(i=>i!==name);
+  state[currentYear].unassigned.push(name);
+  render();
+}
+
+function newGroup(){
+  const n = state[currentYear].groups.length + 1;
+  state[currentYear].groups.push({name:`${currentYear}-${n}`, items:[]});
+  activeGroupIdx = state[currentYear].groups.length - 1;
+  render();
+}
+
+function deleteGroupConfirm(e, idx){
+  e.stopPropagation();
+  if(!confirm("確定刪除此分類？標案將移回未分類。")) return;
+  state[currentYear].unassigned.push(...state[currentYear].groups[idx].items);
+  state[currentYear].groups.splice(idx,1);
+  activeGroupIdx=null; render();
+}
+
+function changeYear(){ currentYear=document.getElementById("yearSelect").value; activeGroupIdx=null; render(); }
+function allowDrop(e){ e.preventDefault(); }
+function onDrop(e,target){
+  e.preventDefault(); const name = e.dataTransfer.getData("text");
+  if(target==="unassigned") moveToUnassigned(name, activeGroupIdx);
+}
+function onDropActive(e){ e.preventDefault(); const name = e.dataTransfer.getData("text"); moveToActiveGroup(name); }
+
+function save(){
+  const btn=document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="儲存中...";
+  fetch(SAVE_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(state)})
+    .finally(()=>{ btn.disabled=false; btn.textContent="💾 儲存資料"; updateStatus("✅ 已儲存至雲端"); });
+}
+
+function printPreview(){ if(activeGroupIdx===null) return alert("請選擇分箱"); printPreviewFormatted(false); }
+function printAll(){ if(state[currentYear].groups.length===0) return alert("尚無分箱"); printPreviewFormatted(true); }
+
+function printPreviewFormatted(allMode = false) {
+  const boxAssignments = {};
+  state[currentYear].groups.forEach(g => boxAssignments[g.name] = g.items);
+  let targetBoxes = allMode ? state[currentYear].groups.map(g => g.name) : [state[currentYear].groups[activeGroupIdx].name];
+
+  let html = `<html><head><title>標案分箱明細表</title><style>
+    @media print { @page { size: A4 landscape; margin: 15mm; } }
+    body { font-family: "Microsoft JhengHei", sans-serif; background: #fff; margin: 0; padding: 0; }
+    .page { page-break-after: always; border: none solid #333; padding: 10px; min-height: 180mm; box-sizing: border-box; position: relative; }
+    .header { text-align: center; margin-bottom: 5px; border-bottom: 4px double #005a9e; padding-bottom: 5px; }
+    .header h1 { font-size: 28pt; margin: 0; letter-spacing: 10px; padding-bottom: 5px }
+    .info-bar { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px; }
+    .box-title { background: #fff; color: #000; padding: 10px 25px; font-size: 26pt; font-weight: bold; border-radius: 5px; }
+    .content-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+    .content-table th { background: #f2f2f2; border: 1px solid #333; padding: 8px; font-size: 22pt; }
+    .content-table td { border: 1px solid #333; padding: 8px 8px; font-size: 22pt; }
+    .footer { position: absolute; bottom: 30px; left: 30px; right: 30px; display: flex; justify-content: space-between; border-top: none solid #ccc; padding-top: 10px; }
+  </style></head><body>`;
+
+  const today = new Date();
+  const dateStr = `${today.getFullYear() - 1911}年${today.getMonth() + 1}月${today.getDate()}日`;
+
+  targetBoxes.forEach(boxName => {
+    const projects = boxAssignments[boxName] || [];
+    html += `
+    <div class="page">
+      <div class="header"><h1>苗栗縣三義鄉公所標案分類明細表</h1></div>
+      <div class="info-bar"><div class="box-title">箱號：${boxName}</div><div style="text-align:right; font-size: 18pt">列印日期：${dateStr}<br></div></div>
+      <table class="content-table"><thead><tr><th style="width:60px">序號</th><th>標  案  名  稱</th></tr></thead><tbody>
+      ${projects.length > 0 ? projects.map((p, i) => `<tr><td style="text-align:center">${i+1}</td><td>${p}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;padding:50px;color:#999">此箱無標案</td></tr>'}
+      </tbody></table>
+      <div class="footer"></div>
+    </div>`;
+  });
+
+  html += `</body></html>`;
+  const w = window.open(); w.document.write(html); w.document.close();
+  setTimeout(() => { w.print(); }, 500);
+}
+
+window.onscroll = function() {
+  const b = document.getElementById("backToTop");
+  b.style.display = (window.pageYOffset > 300) ? "flex" : "none";
+};
+
+startup();
+</script>
+</body>
+</html>
