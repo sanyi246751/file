@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import './index.css';
 
 const SAVE_URL = "https://script.google.com/macros/s/AKfycbxJzve7fNO6WZfgEkOASAdsLUBnO9uJuGMlhkQ66giglv0FLBvNRQQ8o4gl3RN_eIVT/exec";
@@ -12,7 +12,7 @@ const genId = () => Math.random().toString(36).substr(2, 9);
 
 export default function App() {
   const [state, setState] = useState<AppState>({});
-  const [bids, setBids] = useState<any[]>([]);
+  const [, setBids] = useState<any[]>([]);
   const [currentYear, setCurrentYear] = useState<string | null>(null);
   const [activeGroupIdx, setActiveGroupIdx] = useState<number | null>(null);
   
@@ -46,14 +46,14 @@ export default function App() {
           });
           fetchedState[y].unassigned = fetchedState[y].unassigned.map((i: any) => typeof i === 'string' ? { id: genId(), name: i } : i);
 
-          const allItems = fetchedBids.map(r => r[y] ? r[y].toString().trim() : null).filter(Boolean);
+          const allItems = fetchedBids.map((r: any) => r[y] ? r[y].toString().trim() : null).filter(Boolean);
           const usedNames = new Set<string>();
           fetchedState[y].groups.forEach((g: any) => g.items.forEach((i: any) => usedNames.add(i.name)));
           
-          const freshUnassigned = allItems.filter(name => !usedNames.has(name)).map(name => ({ id: genId(), name }));
+          const freshUnassigned = allItems.filter((name: any) => !usedNames.has(name)).map((name: any) => ({ id: genId(), name }));
           const existingUnassignedNames = new Set(fetchedState[y].unassigned.map((i: any) => i.name));
           
-          freshUnassigned.forEach(item => {
+          freshUnassigned.forEach((item: any) => {
             if(!existingUnassignedNames.has(item.name)) fetchedState[y].unassigned.push(item);
           });
         });
