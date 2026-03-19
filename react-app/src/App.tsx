@@ -311,6 +311,27 @@ export default function App() {
       </div>
 
       <div className="main-area">
+        <div className="panel unassigned-panel">
+          <h3>
+            <span>📦 未分類標案</span>
+            <span className="count-badge" key={unassignedItems.length}>{unassignedItems.length}</span>
+          </h3>
+          <div 
+            className="drop-zone" 
+            onDragOver={allowDrop} 
+            onDrop={onDropUnassigned}
+          >
+            {unassignedItems.length > 0 ? (
+              unassignedItems.map(item => renderItem(item, true, null))
+            ) : (
+              <div className="empty-state">
+                <span>🎉</span>
+                太棒了！所有標案皆已分類完畢
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="panel box-panel">
           <h3>
             {activeGroup ? `📁 分箱：${activeGroup.name}` : "🔍 請點選上方標籤選取分箱"}
@@ -333,27 +354,6 @@ export default function App() {
               <div className="empty-state">
                 <span>👆</span>
                 請先選取或新增一個分箱
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="panel unassigned-panel">
-          <h3>
-            <span>📦 未分類標案</span>
-            <span className="count-badge" key={unassignedItems.length}>{unassignedItems.length}</span>
-          </h3>
-          <div 
-            className="drop-zone" 
-            onDragOver={allowDrop} 
-            onDrop={onDropUnassigned}
-          >
-            {unassignedItems.length > 0 ? (
-              unassignedItems.map(item => renderItem(item, true, null))
-            ) : (
-              <div className="empty-state">
-                <span>🎉</span>
-                太棒了！所有標案皆已分類完畢
               </div>
             )}
           </div>
