@@ -199,18 +199,11 @@ button:disabled { background: #bdc3c7; cursor: not-allowed; transform: none; box
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  order: 1; /* 預設順序，可以透過內部類別覆蓋 */
 }
 
 @media (min-width: 992px) {
   .panel { padding: 20px; }
-  .panel.unassigned-panel { order: 1; }
-  .panel.box-panel { order: 2; }
 }
-
-/* 在手機版，分箱區塊放上面 */
-.panel.box-panel { order: 1; }
-.panel.unassigned-panel { order: 2; }
 
 
 h3 {
