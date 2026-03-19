@@ -135,6 +135,8 @@
 const SAVE_URL = "https://script.google.com/macros/s/AKfycbxJzve7fNO6WZfgEkOASAdsLUBnO9uJuGMlhkQ66giglv0FLBvNRQQ8o4gl3RN_eIVT/exec";
 let state = {}, bids = [], currentYear = null, activeGroupIdx = null;
 
+const genId = () => Math.random().toString(36).substr(2, 9);
+
 function updateStatus(msg){ document.getElementById("statusBar").textContent = msg; }
 
 function updateCount(newCount) {
@@ -150,6 +152,7 @@ async function startup(){
   updateStatus("📡 讀取資料中...");
   try {
     const res = await fetch(SAVE_URL);
+    if (!res.ok) throw new Error("Network response was not ok");
     const json = await res.json();
     state = json.data || {};
     bids = json.bids || [];
@@ -162,10 +165,21 @@ async function startup(){
   }
 
   years.forEach(y=>{
+    state[y].groups.forEach(g => {
+      g.items = g.items.map(i => typeof i === 'string' ? { id: genId(), name: i } : i);
+    });
+    state[y].unassigned = state[y].unassigned.map(i => typeof i === 'string' ? { id: genId(), name: i } : i);
+
     const allItems = bids.map(r=>r[y]?r[y].toString().trim():null).filter(Boolean);
-    const used = new Set();
-    state[y].groups.forEach(g=>g.items.forEach(i=>used.add(i)));
-    state[y].unassigned = allItems.filter(i=>!used.has(i));
+    const usedNames = new Set();
+    state[y].groups.forEach(g => g.items.forEach(i => usedNames.add(i.name)));
+    
+    const freshUnassigned = allItems.filter(name => !usedNames.has(name)).map(name => ({ id: genId(), name }));
+    const existingUnassignedNames = new Set(state[y].unassigned.map(i => i.name));
+    
+    freshUnassigned.forEach(item => {
+      if(!existingUnassignedNames.has(item.name)) state[y].unassigned.push(item);
+    });
   });
 
   const sel = document.getElementById("yearSelect");
@@ -189,6 +203,12 @@ function render(){
   if(activeGroupIdx===null){
     title.textContent="🔍 請點選上方標籤選取分箱";
   } else {
+    if(!state[currentYear].groups[activeGroupIdx]) {
+       activeGroupIdx = null; 
+       title.textContent = "🔍 請點選上方標籤選取分箱";
+       renderYearBoxes();
+       return;
+    }
     const g = state[currentYear].groups[activeGroupIdx];
     title.textContent= "📁 分箱：" + g.name;
     g.items.forEach(itm=>activeDrop.appendChild(buildItem(itm,activeGroupIdx)));
@@ -209,37 +229,47 @@ function renderYearBoxes(){
   });
 }
 
-function buildItem(name, idx){
+function buildItem(itemObj, idx){
   const div=document.createElement("div"); div.className="item"; div.draggable=true;
-  div.ondragstart=e=>e.dataTransfer.setData("text",name);
-  const span=document.createElement("span"); span.textContent=name; span.style.flex="1"; div.appendChild(span);
+  div.ondragstart=e=>e.dataTransfer.setData("text", itemObj.id);
+  const span=document.createElement("span"); span.textContent=itemObj.name; span.style.flex="1"; div.appendChild(span);
   const btn=document.createElement("button");
   if(idx==="unassigned"){
     btn.className="item-btn"; btn.style.background="#e8f5e9"; btn.style.color="#2ecc71"; btn.innerHTML="＋";
-    div.onclick=()=>moveToActiveGroup(name);
+    div.onclick=()=>moveToActiveGroup(itemObj.id);
   } else {
     btn.className="item-btn"; btn.style.background="#fff3e0"; btn.style.color="#f39c12"; btn.innerHTML="↩";
-    div.onclick=()=>moveToUnassigned(name,idx);
+    div.onclick=()=>moveToUnassigned(itemObj.id,idx);
   }
   div.appendChild(btn);
   return div;
 }
 
-function moveToActiveGroup(name){
+function moveToActiveGroup(id){
   if(activeGroupIdx===null){ alert("請先選取分箱標籤"); return; }
-  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i!==name);
-  state[currentYear].groups[activeGroupIdx].items.push(name);
+  const item = state[currentYear].unassigned.find(i => i.id === id);
+  if(!item) return;
+  state[currentYear].unassigned = state[currentYear].unassigned.filter(i=>i.id!==id);
+  state[currentYear].groups[activeGroupIdx].items.push(item);
   render();
 }
 
-function moveToUnassigned(name, idx){
-  state[currentYear].groups[idx].items = state[currentYear].groups[idx].items.filter(i=>i!==name);
-  state[currentYear].unassigned.push(name);
+function moveToUnassigned(id, idx){
+  const item = state[currentYear].groups[idx].items.find(i => i.id === id);
+  if(!item) return;
+  state[currentYear].groups[idx].items = state[currentYear].groups[idx].items.filter(i=>i.id!==id);
+  state[currentYear].unassigned.push(item);
   render();
 }
 
 function newGroup(){
-  const n = state[currentYear].groups.length + 1;
+  const existingNumbers = state[currentYear].groups.map(g => {
+    const m = g.name.match(new RegExp(`^${currentYear}-(\\d+)$`));
+    return m ? parseInt(m[1], 10) : null;
+  }).filter(Boolean);
+  
+  let maxNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+  let n = maxNum + 1;
   state[currentYear].groups.push({name:`${currentYear}-${n}`, items:[]});
   activeGroupIdx = state[currentYear].groups.length - 1;
   render();
@@ -256,15 +286,30 @@ function deleteGroupConfirm(e, idx){
 function changeYear(){ currentYear=document.getElementById("yearSelect").value; activeGroupIdx=null; render(); }
 function allowDrop(e){ e.preventDefault(); }
 function onDrop(e,target){
-  e.preventDefault(); const name = e.dataTransfer.getData("text");
-  if(target==="unassigned") moveToUnassigned(name, activeGroupIdx);
+  e.preventDefault(); const id = e.dataTransfer.getData("text");
+  if(target==="unassigned") moveToUnassigned(id, activeGroupIdx);
 }
-function onDropActive(e){ e.preventDefault(); const name = e.dataTransfer.getData("text"); moveToActiveGroup(name); }
+function onDropActive(e){ e.preventDefault(); const id = e.dataTransfer.getData("text"); moveToActiveGroup(id); }
 
 function save(){
   const btn=document.getElementById("saveBtn"); btn.disabled=true; btn.textContent="儲存中...";
-  fetch(SAVE_URL,{method:"POST",mode:"no-cors",body:JSON.stringify(state)})
-    .finally(()=>{ btn.disabled=false; btn.textContent="💾 儲存資料"; updateStatus("✅ 已儲存至雲端"); });
+  fetch(SAVE_URL,{
+    method:"POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body:JSON.stringify(state)
+  })
+  .then(res => {
+    if(!res.ok) throw new Error("Server error");
+    return res.text();
+  })
+  .then(text => {
+    btn.disabled=false; btn.textContent="💾 儲存資料"; updateStatus("✅ 已儲存至雲端");
+  })
+  .catch(err => {
+    console.error(err);
+    btn.disabled=false; btn.textContent="💾 重新儲存"; updateStatus("❌ 儲存失敗");
+    alert("儲存失敗！請檢查網路。");
+  });
 }
 
 function printPreview(){ if(activeGroupIdx===null) return alert("請選擇分箱"); printPreviewFormatted(false); }
@@ -299,7 +344,7 @@ function printPreviewFormatted(allMode = false) {
       <div class="header"><h1>苗栗縣三義鄉公所標案分類明細表</h1></div>
       <div class="info-bar"><div class="box-title">箱號：${boxName}</div><div style="text-align:right; font-size: 18pt">列印日期：${dateStr}<br></div></div>
       <table class="content-table"><thead><tr><th style="width:60px">序號</th><th>標  案  名  稱</th></tr></thead><tbody>
-      ${projects.length > 0 ? projects.map((p, i) => `<tr><td style="text-align:center">${i+1}</td><td>${p}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;padding:50px;color:#999">此箱無標案</td></tr>'}
+      ${projects.length > 0 ? projects.map((obj, i) => `<tr><td style="text-align:center">${i+1}</td><td>${obj.name}</td></tr>`).join('') : '<tr><td colspan="2" style="text-align:center;padding:50px;color:#999">此箱無標案</td></tr>'}
       </tbody></table>
       <div class="footer"></div>
     </div>`;
